@@ -83,3 +83,4 @@ class SubFormer_Prot(nn.Module):
         out_token = src[:,0,:]
 
         return out_token
+
