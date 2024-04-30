@@ -10,6 +10,9 @@ setup(
         'numpy',
         'scipy',
         'deeptime',
+        'torch>=2.0',
+        'torch_geometric',
+        'torch_scatter',
     ]
 )
 

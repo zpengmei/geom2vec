@@ -2,12 +2,12 @@ import re
 from typing import Optional, List, Tuple
 import torch
 from torch import nn
-from ssp.modules.models.representation_models.torchmd.output_modules import EquivariantScalar
-from ssp.modules.models.representation_models.torchmd.et import TorchMD_ET
+from .output_modules import EquivariantScalar
+from .et import TorchMD_ET
 
 import warnings
 import argparse
-from ssp.modules.models.representation_models.torchmd.utils import rbf_class_mapping, act_class_mapping
+from .utils import rbf_class_mapping, act_class_mapping
 
 
 import argparse

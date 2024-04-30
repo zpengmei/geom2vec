@@ -1,7 +1,7 @@
 from abc import abstractmethod, ABCMeta
 from typing import Optional
 import ase
-from ssp.modules.models.representation_models.torchmd.utils import act_class_mapping, GatedEquivariantBlock
+from .utils import act_class_mapping, GatedEquivariantBlock
 from torch_scatter import scatter
 import torch
 from torch import nn

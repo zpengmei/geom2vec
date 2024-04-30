@@ -3,7 +3,7 @@ import torch
 from torch import nn
 from torch_geometric.nn import MessagePassing
 from torch_scatter import scatter
-from ssp.modules.models.representation_models.torchmd.utils import (
+from .utils import (
     NeighborEmbedding,
     CosineCutoff,
     Distance,
@@ -54,22 +54,22 @@ class TorchMD_ET(nn.Module):
     """
 
     def __init__(
-            self,
-            hidden_channels=128,
-            num_layers=6,
-            num_rbf=50,
-            rbf_type="expnorm",
-            trainable_rbf=True,
-            activation="silu",
-            attn_activation="silu",
-            neighbor_embedding=True,
-            num_heads=8,
-            distance_influence="both",
-            cutoff_lower=0.0,
-            cutoff_upper=5.0,
-            max_z=100,
-            max_num_neighbors=32,
-            layernorm_on_vec=None,
+        self,
+        hidden_channels=128,
+        num_layers=6,
+        num_rbf=50,
+        rbf_type="expnorm",
+        trainable_rbf=True,
+        activation="silu",
+        attn_activation="silu",
+        neighbor_embedding=True,
+        num_heads=8,
+        distance_influence="both",
+        cutoff_lower=0.0,
+        cutoff_upper=5.0,
+        max_z=100,
+        max_num_neighbors=32,
+        layernorm_on_vec=None,
     ):
         super(TorchMD_ET, self).__init__()
 
@@ -163,7 +163,7 @@ class TorchMD_ET(nn.Module):
 
         edge_index, edge_weight, edge_vec = self.distance(pos, batch)
         assert (
-                edge_vec is not None
+            edge_vec is not None
         ), "Distance module did not return directional information"
 
         edge_attr = self.distance_expansion(edge_weight)
@@ -205,15 +205,15 @@ class TorchMD_ET(nn.Module):
 
 class EquivariantMultiHeadAttention(MessagePassing):
     def __init__(
-            self,
-            hidden_channels,
-            num_rbf,
-            distance_influence,
-            num_heads,
-            activation,
-            attn_activation,
-            cutoff_lower,
-            cutoff_upper,
+        self,
+        hidden_channels,
+        num_rbf,
+        distance_influence,
+        num_heads,
+        activation,
+        attn_activation,
+        cutoff_lower,
+        cutoff_upper,
     ):
         super(EquivariantMultiHeadAttention, self).__init__(aggr="add", node_dim=0)
         assert hidden_channels % num_heads == 0, (
@@ -333,20 +333,18 @@ class EquivariantMultiHeadAttention(MessagePassing):
         return x, vec
 
     def aggregate(
-            self,
-            features: Tuple[Tensor, Tensor],
-            index: Tensor,
-            ptr: Optional[Tensor],
-            dim_size: Optional[int],
+        self,
+        features: Tuple[Tensor, Tensor],
+        index: Tensor,
+        ptr: Optional[Tensor],
+        dim_size: Optional[int],
     ) -> Tuple[Tensor, Tensor]:
         x, vec = features
         x = scatter(x, index, dim=self.node_dim, dim_size=dim_size)
         vec = scatter(vec, index, dim=self.node_dim, dim_size=dim_size)
         return x, vec
 
-    def update(
-            self, inputs: Tuple[Tensor, Tensor]
-    ) -> Tuple[Tensor, Tensor]:
+    def update(self, inputs: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Tensor]:
         return inputs
 
 
@@ -360,12 +358,12 @@ class EquivariantLayerNorm(nn.Module):
     elementwise_linear: bool
 
     def __init__(
-            self,
-            normalized_shape: int,
-            eps: float = 1e-5,
-            elementwise_linear: bool = True,
-            device=None,
-            dtype=None,
+        self,
+        normalized_shape: int,
+        eps: float = 1e-5,
+        elementwise_linear: bool = True,
+        device=None,
+        dtype=None,
     ) -> None:
         factory_kwargs = {"device": device, "dtype": dtype}
         super(EquivariantLayerNorm, self).__init__()
@@ -378,7 +376,9 @@ class EquivariantLayerNorm(nn.Module):
                 torch.empty(self.normalized_shape, **factory_kwargs)
             )
         else:
-            self.register_parameter("weight", None)  # Without bias term to preserve equivariance!
+            self.register_parameter(
+                "weight", None
+            )  # Without bias term to preserve equivariance!
 
         self.reset_parameters()
 
@@ -398,9 +398,7 @@ class EquivariantLayerNorm(nn.Module):
         Based on https://github.com/pytorch/pytorch/issues/25481
         """
         _, s, v = matrix.svd()
-        good = (
-                s > s.max(-1, True).values * s.size(-1) * torch.finfo(s.dtype).eps
-        )
+        good = s > s.max(-1, True).values * s.size(-1) * torch.finfo(s.dtype).eps
         components = good.sum(-1)
         common = components.max()
         unbalanced = common != components.min()
@@ -411,9 +409,7 @@ class EquivariantLayerNorm(nn.Module):
                 good = good[..., :common]
         if unbalanced:
             s = s.where(good, torch.zeros((), device=s.device, dtype=s.dtype))
-        return (v * 1 / torch.sqrt(s + self.eps).unsqueeze(-2)) @ v.transpose(
-            -2, -1
-        )
+        return (v * 1 / torch.sqrt(s + self.eps).unsqueeze(-2)) @ v.transpose(-2, -1)
 
     def forward(self, input: Tensor) -> Tensor:
         input = input.to(torch.float64)  # Need double precision for accurate inversion.
@@ -429,12 +425,11 @@ class EquivariantLayerNorm(nn.Module):
         )
         covar = self.covariance(input) + self.eps * reg_matrix
         covar_sqrtinv = self.symsqrtinv(covar)
-        return (covar_sqrtinv @ input).to(
-            self.weight.dtype
-        ) * self.weight.reshape(1, 1, self.normalized_shape[0])
+        return (covar_sqrtinv @ input).to(self.weight.dtype) * self.weight.reshape(
+            1, 1, self.normalized_shape[0]
+        )
 
     def extra_repr(self) -> str:
-        return (
-            "{normalized_shape}, "
-            "elementwise_linear={elementwise_linear}".format(**self.__dict__)
+        return "{normalized_shape}, " "elementwise_linear={elementwise_linear}".format(
+            **self.__dict__
         )

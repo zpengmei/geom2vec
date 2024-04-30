@@ -5,7 +5,7 @@
 import torch
 from typing import Optional, Tuple
 from torch import Tensor, nn
-from ssp.modules.models.representation_models.torchmd.utils import (
+from .utils import (
     CosineCutoff,
     # OptimizedDistance,
     Distance,
