@@ -1,5 +1,3 @@
-# an setup file for the geom2vec package
-
 from setuptools import setup, find_packages
 
 setup(
