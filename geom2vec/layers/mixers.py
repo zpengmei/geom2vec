@@ -39,6 +39,18 @@ class CustomTransformerEncoder(nn.Module):
 
 
 class SubFormer(nn.Module):
+    r"""
+    Transformer model on coarsed graph, i.e. residue level.
+
+    Args:
+        hidden_channels (int): The number of hidden units.
+        encoder_layers (int): The number of encoder layers.
+        nhead (int): The number of heads in the multiheadattention models.
+        dim_feedforward (int): The dimension of the feedforward network model.
+        pool (str): The pooling method.
+        dropout (float): The dropout rate.
+        attn_map (bool): Whether to return the attention map. i.e. using the custom transformer encoder layer.
+    """
 
     def __init__(self, hidden_channels, encoder_layers, nhead, dim_feedforward, pool='cls', dropout=0.1, attn_map=True):
         super(SubFormer, self).__init__()
@@ -100,6 +112,14 @@ class SubFormer(nn.Module):
 # MLP-Mixer on coarsed graph, i.e. residue level (SubMixer)
 
 class FeedForward(nn.Module):
+    r"""Feedforward neural network with GELU activation.
+
+    Args:
+        input_dim (int): The number of input features.
+        hidden_dim (int): The number of hidden units.
+        dropout (float): The dropout rate.
+    """
+
     def __init__(self, input_dim, hidden_dim, dropout=0.):
         super().__init__()
         self.net = nn.Sequential(
@@ -115,6 +135,16 @@ class FeedForward(nn.Module):
 
 
 class MixerBlock(nn.Module):
+    r"""Mixer block.
+
+    Args:
+        dim (int): The number of input features.
+        num_patch (int): The number of patches.
+        token_dim (int): The number of token dimensions.
+        channel_dim (int): The number of channel dimensions.
+        dropout (float): The dropout rate.
+    """
+
     def __init__(self, dim, num_patch, token_dim, channel_dim, dropout=0.):
         super().__init__()
         self.token_mixer = nn.Sequential(
@@ -136,6 +166,17 @@ class MixerBlock(nn.Module):
 
 
 class SubMixer(nn.Module):
+    r"""Mixer model.
+
+    Args:
+        num_patch (int): The number of patches.
+        depth (int): The number of mixer blocks.
+        dropout (float): The dropout rate.
+        dim (int): The number of input features.
+        token_dim (int): The number of token dimensions.
+        channel_dim (int): The number of channel dimensions.
+        pooling (str): The pooling method.
+    """
     def __init__(self,
                  num_patch,
                  depth,

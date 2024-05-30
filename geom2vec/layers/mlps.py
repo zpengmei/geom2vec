@@ -85,6 +85,7 @@ class EquivariantScalar(torch.nn.Module):
     Args:
         hidden_channels (int): The number of hidden channels in the node
             embeddings.
+        out_channels (int): The number of output channels.
     """
 
     def __init__(self, hidden_channels: int, out_channels: int) -> None:
@@ -93,11 +94,11 @@ class EquivariantScalar(torch.nn.Module):
         self.output_network = torch.nn.ModuleList([
             GatedEquivariantBlock(
                 hidden_channels,
-                hidden_channels // 2,
+                hidden_channels,
                 scalar_activation=True,
             ),
             GatedEquivariantBlock(
-                hidden_channels // 2,
+                hidden_channels,
                 out_channels,
                 scalar_activation=False,
             ),
@@ -127,7 +128,17 @@ class EquivariantScalar(torch.nn.Module):
 
 
 class MLP(torch.nn.Module):
-    r"""A multi-layer perceptron (MLP) with SiLU activation functions."""
+    r"""A multi-layer perceptron (MLP) with SiLU activation functions.
+
+    Args:
+        input_channels (int): The number of input features.
+        hidden_channels (int): The number of hidden features.
+        out_channels (int): The number of output features.
+        num_layers (int): The number of MLP layers.
+        out_activation (torch.nn.Module, optional): The activation function of the
+            output layer. (default: :obj:`None`)
+
+    """
 
     def __init__(self,
                  input_channels: int,
@@ -137,6 +148,7 @@ class MLP(torch.nn.Module):
                  out_activation: Optional[torch.nn.Module] = None,
                  ) -> None:
         super(MLP, self).__init__()
+
 
         self.layers = torch.nn.ModuleList()
         self.layers.append(torch.nn.Linear(input_channels, hidden_channels))

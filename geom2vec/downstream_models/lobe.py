@@ -9,9 +9,9 @@ class lobe(torch.nn.Module):
 
     def __init__(self,
                  # general parameters
-                 hidden_channels:int,
-                 intermediate_channels:int,
-                 output_channels:int,
+                 hidden_channels: int,
+                 intermediate_channels: int,
+                 output_channels: int,
                  num_layers,
                  batch_norm=False,
                  vector_feature=True,
@@ -25,8 +25,8 @@ class lobe(torch.nn.Module):
                  pooling='cls',
                  dropout=0.1,
                  attn_map=False,
-                 num_tokens=1, # number of tokens for mixer
-                 token_dim=64, # dimension of tokens for mixer
+                 num_tokens=1,  # number of tokens for mixer
+                 token_dim=64,  # dimension of tokens for mixer
                  ):
         super(lobe, self).__init__()
 
@@ -42,7 +42,6 @@ class lobe(torch.nn.Module):
         self.vector_feature = vector_feature
         self.dropout = torch.nn.Dropout(mlp_dropout)
 
-
         self.input_projection = EquivariantScalar(hidden_channels, intermediate_channels)
         if not vector_feature:
             self.input_projection = torch.nn.Linear(hidden_channels, intermediate_channels)
@@ -54,7 +53,7 @@ class lobe(torch.nn.Module):
                 hidden_channels=intermediate_channels,
                 encoder_layers=num_mixer_layers,
                 nhead=nhead,
-                dim_feedforward=int(expansion_factor*intermediate_channels),
+                dim_feedforward=int(expansion_factor * intermediate_channels),
                 pool=pooling,
                 dropout=dropout,
                 attn_map=attn_map
@@ -130,10 +129,3 @@ class lobe(torch.nn.Module):
             x = self.output_projection(x)
 
         return x
-
-
-
-
-
-
-
