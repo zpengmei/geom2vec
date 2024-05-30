@@ -103,7 +103,10 @@ class lobe(torch.nn.Module):
             batch_size, num_nodes, _, _ = data.shape
             x_rep = data[:, :, 0, :].reshape(batch_size * num_nodes, -1)
             v_rep = data[:, :, 1:, :].reshape(batch_size * num_nodes, 3, -1)
-            x, _ = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
+            if not self.vector_feature:
+                x = self.input_projection(x_rep)
+            else:
+                x, _ = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
             x = x.reshape(batch_size, num_nodes, -1)
             x = self.mixer(x)
             x = self.output_projection(x)
@@ -112,7 +115,10 @@ class lobe(torch.nn.Module):
             batch_size, num_nodes, _, dim = data.shape
             x_rep = data[:, :, 0, :].reshape(batch_size * num_nodes, -1)
             v_rep = data[:, :, 1:, :].reshape(batch_size * num_nodes, 3, -1)
-            x, _ = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
+            if not self.vector_feature:
+                x = self.input_projection(x_rep)
+            else:
+                x, _ = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
             x = x.reshape(batch_size, num_nodes, dim)
             x = self.mixer(x)
             if self.pooling == 'mean':
