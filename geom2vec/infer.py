@@ -91,8 +91,3 @@ def infer_traj(
 
     return None
 
-
-
-
-
-
