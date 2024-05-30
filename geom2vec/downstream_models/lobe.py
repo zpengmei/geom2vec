@@ -88,7 +88,7 @@ class lobe(torch.nn.Module):
             x_rep = data[:, 0, :]
             v_rep = data[:, 1:, :]
 
-            if not self.vector_features:
+            if not self.vector_feature:
                 x_rep = self.input_projection(x_rep)
             else:
                 x_rep, _ = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
