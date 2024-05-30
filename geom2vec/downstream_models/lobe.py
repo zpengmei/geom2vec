@@ -40,7 +40,7 @@ class lobe(torch.nn.Module):
 
         self.input_projection = EquivariantScalar(hidden_channels, intermediate_channels)
         if not vector_feature:
-            self.output_projection = torch.nn.Linear(hidden_channels, intermediate_channels)
+            self.input_projection = torch.nn.Linear(hidden_channels, intermediate_channels)
 
         if token_mixer == 'None':
             self.mixer = None
@@ -67,7 +67,7 @@ class lobe(torch.nn.Module):
 
         self.output_projection = MLP(
             input_channels=intermediate_channels,
-            hidden_channels=intermediate_channels//2,
+            hidden_channels=intermediate_channels,
             out_channels=output_channels,
             num_layers=num_layers
         )
