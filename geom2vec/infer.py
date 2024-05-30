@@ -16,6 +16,7 @@ def infer_traj(
         cg_mapping: np.ndarray = None,
         atom_mask: np.ndarray = None,
         cg_mask: np.ndarray = None,
+        torch_or_numpy: str = 'torch'
 ):
     r"""
     This function is used to infer the trajectories of data.
@@ -37,6 +38,9 @@ def infer_traj(
         The mask of the atoms for the inference to save the data.
     - cg_mask: ndarray, default = None
         The mask of the coarse-grained beads for the inference to save the data.
+    - torch_or_numpy: str, default = 'torch'
+        The type of data to be stored in the output file.
+
     """
     model.eval()
     model.to(device=device)
@@ -76,18 +80,25 @@ def infer_traj(
                     if cg_mask is not None:
                         cg_rep = cg_rep[:, cg_mask, :, ]
 
-                    cg_rep.detach().cpu().numpy()
+                    cg_rep.detach().cpu()
                     out_list.append(cg_rep)
                     continue
 
-                atom_rep = atom_rep.detach().cpu().numpy()
+                atom_rep = atom_rep.detach().cpu()
                 out_list.append(atom_rep.sum(dim=1))
                 torch.cuda.empty_cache()
 
         # concatenate the output batches
-        traj_rep = np.concatenate(out_list, axis=0)
-        np.savez(saving_path, traj_rep)
-        print(f"Trajectory {i} has been saved to {saving_path}.")
+        traj_rep = torch.cat(out_list, dim=0)
+        if torch_or_numpy == 'numpy':
+            traj_rep = traj_rep.numpy()
+            np.savez(saving_path, traj_rep)
+            print(f"Trajectory {i} has been saved to {saving_path} using numpy.")
+        elif torch_or_numpy == 'torch':
+            torch.save(traj_rep, saving_path)
+            print(f"Trajectory {i} has been saved to {saving_path} using torch.")
+        else:
+            print("Invalid option for torch_or_numpy. Please choose either 'torch' or 'numpy'.")
 
     return None
 
