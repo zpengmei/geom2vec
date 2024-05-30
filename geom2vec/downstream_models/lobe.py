@@ -72,8 +72,9 @@ class lobe(torch.nn.Module):
             num_layers=num_layers
         )
 
+        self.batch_norm = batch_norm
         if batch_norm:
-            self.batch_norm = nn.BatchNorm1d(intermediate_channels)
+            self.batchnorm = nn.BatchNorm1d(intermediate_channels)
 
     def forward(self, data):
 
@@ -94,8 +95,8 @@ class lobe(torch.nn.Module):
                 x_rep, _ = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
 
             x_rep = self.dropout(x_rep)
-            if self.batch_norm is not None:
-                x_rep = self.batch_norm(x_rep)
+            if self.batch_norm:
+                x_rep = self.batchnorm(x_rep)
             x = self.output_projection(x_rep)
 
         elif self.token_mixer == 'subformer':
