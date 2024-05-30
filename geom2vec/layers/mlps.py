@@ -133,7 +133,9 @@ class MLP(torch.nn.Module):
                  input_channels:int,
                  hidden_channels:int,
                  out_channels: int,
-                 num_layers: int) -> None:
+                 num_layers: int,
+                 out_activation: Optional[torch.nn.Module] = None,
+                 ) -> None:
         super(MLP, self).__init__()
 
         self.layers = torch.nn.ModuleList()
@@ -144,8 +146,14 @@ class MLP(torch.nn.Module):
             self.layers.append(torch.nn.SiLU())
         self.layers.append(torch.nn.Linear(hidden_channels, out_channels))
 
+        if out_activation is not None:
+            self.out_activation = out_activation
+        else:
+            self.out_activation = torch.nn.Identity()
+
+
     def forward(self, x: Tensor) -> Tensor:
         r"""Applies the MLP to the input tensor."""
         for layer in self.layers:
             x = layer(x)
-        return x
+        return self.out_activation(x)
