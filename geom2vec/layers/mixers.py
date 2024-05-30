@@ -160,5 +160,4 @@ class SubMixer(nn.Module):
             x = x.mean(1)
         elif self.pooling == 'sum':
             x = x.sum(1)
-        x = self.mlp_head(x)
         return x
