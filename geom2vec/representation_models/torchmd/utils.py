@@ -4,8 +4,7 @@ from torch import nn
 import torch.nn.functional as F
 from torch_geometric.nn import MessagePassing
 from torch_cluster import radius_graph
-from typing import Optional, Tuple
-from torch import Tensor
+
 
 
 def visualize_basis(basis_type, num_rbf=50, cutoff_lower=0, cutoff_upper=5):
@@ -301,7 +300,7 @@ act_class_mapping = {
 }
 
 
-# from ssp.modules.representation_models.representation_models.torchmd.extensions import get_neighbor_pairs_kernel
+# from ssp.modules.models.representation_models.torchmd.extensions import get_neighbor_pairs_kernel
 # class OptimizedDistance(torch.nn.Module):
 #     """ Compute the neighbor list for a given cutoff.
 #

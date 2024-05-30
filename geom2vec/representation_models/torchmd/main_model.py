@@ -1,19 +1,17 @@
 import re
-from typing import Optional, List, Tuple
+from typing import Optional, Tuple
 import torch
 from torch import nn
-from .output_modules import EquivariantScalar
-from .et import TorchMD_ET
-
+from output_modules import EquivariantScalar
+from et import TorchMD_ET
+from tensornet import TensorNet
 import warnings
-import argparse
-from .utils import rbf_class_mapping, act_class_mapping
 
 
 import argparse
 
 
-def get_args(hidden_channels, num_layers, num_rbf, num_heads, cutoff=5.0):
+def get_args(hidden_channels, num_layers, num_rbf, num_heads, cutoff=5.0,rep_model='et'):
     # Directly create a Namespace object with the required arguments
     args = argparse.Namespace(
         embedding_dimension=hidden_channels,
@@ -35,7 +33,8 @@ def get_args(hidden_channels, num_layers, num_rbf, num_heads, cutoff=5.0):
         max_z=100,
         max_num_neighbors=32,
         standardize=False,
-        reduce_op='add'
+        reduce_op='add',
+        rep_model=rep_model
     )
     return args
 
@@ -65,7 +64,20 @@ def create_model(args, prior_model=None, mean=None, std=None):
         **shared_args,
     )
 
-    # representation_model= TensorNet()
+    if args.rep_model == 'tensornet':
+        representation_model= TensorNet(
+            hidden_channels=args.embedding_dimension,
+            num_layers=args.num_layers,
+            num_rbf=args.num_rbf,
+            rbf_type=args.rbf_type,
+            trainable_rbf=args.trainable_rbf,
+            activation=args.activation,
+            cutoff_lower=args.cutoff_lower,
+            cutoff_upper=args.cutoff_upper,
+            max_num_neighbors=args.max_num_neighbors,
+            vector_output=True,
+        )
+
 
     # create output network
 
