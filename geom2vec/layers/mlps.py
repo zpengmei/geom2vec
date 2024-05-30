@@ -130,8 +130,8 @@ class MLP(torch.nn.Module):
     r"""A multi-layer perceptron (MLP) with SiLU activation functions."""
 
     def __init__(self,
-                 input_channels:int,
-                 hidden_channels:int,
+                 input_channels: int,
+                 hidden_channels: int,
                  out_channels: int,
                  num_layers: int,
                  out_activation: Optional[torch.nn.Module] = None,
@@ -141,7 +141,7 @@ class MLP(torch.nn.Module):
         self.layers = torch.nn.ModuleList()
         self.layers.append(torch.nn.Linear(input_channels, hidden_channels))
         self.layers.append(torch.nn.SiLU())
-        for _ in range(num_layers-2):
+        for _ in range(num_layers - 2):
             self.layers.append(torch.nn.Linear(hidden_channels, hidden_channels))
             self.layers.append(torch.nn.SiLU())
         self.layers.append(torch.nn.Linear(hidden_channels, out_channels))
@@ -150,7 +150,6 @@ class MLP(torch.nn.Module):
             self.out_activation = out_activation
         else:
             self.out_activation = torch.nn.Identity()
-
 
     def forward(self, x: Tensor) -> Tensor:
         r"""Applies the MLP to the input tensor."""

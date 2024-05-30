@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from geom2vec.layers.mlps import EquivariantScalar, MLP
 from geom2vec.layers.mixers import SubFormer, SubMixer
+from typing import Optional
 
 
 class lobe(torch.nn.Module):
@@ -15,6 +16,7 @@ class lobe(torch.nn.Module):
                  batch_norm=False,
                  vector_feature=True,
                  mlp_dropout=0.0,
+                 mlp_out_activation=Optional[nn.Module],
                  # mixer parameters
                  token_mixer='None',
                  num_mixer_layers=4,
@@ -69,7 +71,8 @@ class lobe(torch.nn.Module):
             input_channels=intermediate_channels,
             hidden_channels=intermediate_channels,
             out_channels=output_channels,
-            num_layers=num_layers
+            num_layers=num_layers,
+            out_activation=mlp_out_activation
         )
 
         self.batch_norm = batch_norm
