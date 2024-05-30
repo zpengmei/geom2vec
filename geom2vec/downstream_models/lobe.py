@@ -36,9 +36,12 @@ class lobe(torch.nn.Module):
         if token_mixer == 'submixer' and pooling == 'cls':
             raise ValueError('Submixer does not support cls pooling')
 
+        self.pooling = pooling
+
         self.token_mixer = token_mixer
         self.vector_feature = vector_feature
         self.dropout = torch.nn.Dropout(mlp_dropout)
+
 
         self.input_projection = EquivariantScalar(hidden_channels, intermediate_channels)
         if not vector_feature:
@@ -124,10 +127,6 @@ class lobe(torch.nn.Module):
                 x, _ = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
             x = x.reshape(batch_size, num_nodes, dim)
             x = self.mixer(x)
-            if self.pooling == 'mean':
-                x = x.mean(1)
-            elif self.pooling == 'sum':
-                x = x.sum(1)
             x = self.output_projection(x)
 
         return x
