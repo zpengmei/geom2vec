@@ -3,6 +3,7 @@ import numpy as np
 from typing import List
 from tqdm import tqdm
 from torch_scatter import scatter
+import os
 
 
 def create_model(model_type,
@@ -47,7 +48,8 @@ def infer_traj(
         cg_mapping: np.ndarray = None,
         atom_mask: np.ndarray = None,
         cg_mask: np.ndarray = None,
-        torch_or_numpy: str = 'torch'
+        torch_or_numpy: str = 'torch',
+        file_name_list: List[str] = None
 ):
     r"""
     This function is used to infer the trajectories of data.
@@ -71,6 +73,8 @@ def infer_traj(
         The mask of the coarse-grained beads for the inference to save the data.
     - torch_or_numpy: str, default = 'torch'
         The type of data to be stored in the output file.
+    - file_name_list: list of str, default = None
+        The list of file names to be saved.
 
     """
     model.eval()
@@ -121,16 +125,20 @@ def infer_traj(
                 out_list.append(atom_rep.sum(dim=1))
                 torch.cuda.empty_cache()
 
-        # concatenate the output batches
-        traj_rep = torch.cat(out_list, dim=0)
-        if torch_or_numpy == 'numpy':
-            traj_rep = traj_rep.numpy()
-            np.savez(saving_path, traj_rep)
-            print(f"Trajectory {i} has been saved to {saving_path} using numpy.")
-        elif torch_or_numpy == 'torch':
-            torch.save(traj_rep, saving_path)
-            print(f"Trajectory {i} has been saved to {saving_path} using torch.")
-        else:
-            print("Invalid option for torch_or_numpy. Please choose either 'torch' or 'numpy'.")
+            # concatenate the output batches
+            traj_rep = torch.cat(out_list, dim=0)
+            if torch_or_numpy == 'numpy':
+                traj_rep = traj_rep.numpy()
+                saving_file_name = file_name_list[i] if file_name_list is not None else f"traj_{i}"
+                saving_path = os.path.join(saving_path, f"{saving_file_name}.npz")
+                np.savez(saving_path, traj_rep)
+                print(f"Trajectory {i} has been saved to {saving_path} using numpy.")
+            elif torch_or_numpy == 'torch':
+                saving_file_name = file_name_list[i] if file_name_list is not None else f"traj_{i}"
+                saving_path = os.path.join(saving_path, f"{saving_file_name}.pt")
+                torch.save(traj_rep, saving_path)
+                print(f"Trajectory {i} has been saved to {saving_path} using torch.")
+            else:
+                print("Invalid option for torch_or_numpy. Please choose either 'torch' or 'numpy'.")
 
     return None
