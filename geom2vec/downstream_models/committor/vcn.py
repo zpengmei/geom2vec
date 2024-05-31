@@ -155,8 +155,10 @@ class VarComm(torch.nn.Module):
 
         out_list = []
         with torch.no_grad():
-            batch_dataset = torch.split(dataset, batch_size)
-            for data in tqdm(batch_dataset):
+            loader = torch.utils.data.DataLoader(
+                dataset, batch_size=batch_size, shuffle=False
+            )
+            for data,_,_ in tqdm(loader):
                 data = data.to(device)
                 out = model(data)
                 out_list.append(out.clone().detach().cpu())
