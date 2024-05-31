@@ -130,13 +130,13 @@ def infer_traj(
             if torch_or_numpy == 'numpy':
                 traj_rep = traj_rep.numpy()
                 saving_file_name = file_name_list[i] if file_name_list is not None else f"traj_{i}"
-                saving_path = os.path.join(saving_path, f"{saving_file_name}.npz")
-                np.savez(saving_path, traj_rep)
+                saving_filepath = os.path.join(saving_path, f"{saving_file_name}.npz")
+                np.savez(saving_filepath, traj_rep)
                 print(f"Trajectory {i} has been saved to {saving_path} using numpy.")
             elif torch_or_numpy == 'torch':
                 saving_file_name = file_name_list[i] if file_name_list is not None else f"traj_{i}"
-                saving_path = os.path.join(saving_path, f"{saving_file_name}.pt")
-                torch.save(traj_rep, saving_path)
+                saving_filepath = os.path.join(saving_path, f"{saving_file_name}.pt")
+                torch.save(traj_rep, saving_filepath)
                 print(f"Trajectory {i} has been saved to {saving_path} using torch.")
             else:
                 print("Invalid option for torch_or_numpy. Please choose either 'torch' or 'numpy'.")
