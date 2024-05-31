@@ -1,8 +1,8 @@
 import numpy as np
 import torch
 from tqdm import *
-from utils import estimate_koopman_matrix, map_data, map_data_to_tensor
-from .dataprocessing import Postprocessing_vamp
+from utils import estimate_koopman_matrix, map_data_to_tensor
+from dataprocessing import Postprocessing_vamp
 
 
 class VAMPNet_Estimator:
