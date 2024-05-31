@@ -30,12 +30,13 @@ def count_segments(numbers):
     return segment_counts_array
 
 
-def extract_mda_info(protein, stride=1):
+def extract_mda_info(protein, stride=1, selection=None):
     # input: MDA Universe object with selection, output: positions, atomic_numbers, segment_counts
-    # protein = u.select_atoms('protein and prop mass > 1.5 ')
-
+    protein_residues = protein.select_atoms('prop mass > 1.5 ') # remove hydrogens
+    if selection is not None:
+        protein_residues = protein.select_atoms(selection)
     # Get all residues in the protein selection
-    protein_residues = protein.residues
+    # protein_residues = protein.residues
     atomic_masses = protein_residues.masses
     atomic_masses = np.round(atomic_masses, 3)
 
@@ -53,7 +54,7 @@ def extract_mda_info(protein, stride=1):
     return positions, np.array(atomic_numbers), np.array(segment_counts)
 
 
-def extract_mda_info_folder(folder, top_file,stride=1):
+def extract_mda_info_folder(folder, top_file,stride=1, selection=None):
     r"""
     do the extraction for all the files in the folder
 
@@ -64,6 +65,8 @@ def extract_mda_info_folder(folder, top_file,stride=1):
         The topology file
     - stride: int, default = 1
         The stride to use when extracting the data
+    - selection: str, default = None
+        The selection to use when extracting the data in MDAnalysis. If None, all atoms are selected except hydrogens.
 
     Returns:
     - position_list: list
@@ -84,7 +87,7 @@ def extract_mda_info_folder(folder, top_file,stride=1):
     for traj in dcd_files:
         print(f'Processing {traj}')
         u = mda.Universe(top_file, os.path.join(folder, traj))
-        positions, atomic_numbers, segment_counts = extract_mda_info(u, stride=stride)
+        positions, atomic_numbers, segment_counts = extract_mda_info(u, stride=stride, selection=selection)
         position_list.append(positions)
 
     return position_list, atomic_numbers, segment_counts, dcd_files
