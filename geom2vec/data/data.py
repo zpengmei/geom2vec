@@ -14,7 +14,7 @@ class Preprocessing:
 
     def __init__(self,
                  torch_or_numpy='numpy',
-                 dtype=float):
+                 ):
 
         self._torch_or_numpy = torch_or_numpy
 
