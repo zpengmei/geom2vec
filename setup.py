@@ -7,11 +7,12 @@ setup(
     install_requires=[
         'numpy',
         'scipy',
-        'deeptime',
-        'torch>=2.0',
-        'torch_geometric',
-        'torch_scatter',
-        'deeptime',
+        'MDAnalysis',
+        'tqdm',
+        'tensorboard',
+        'ase',
+        'rdkit',
+        'matplotlib',
     ]
 )
 
