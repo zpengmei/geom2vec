@@ -5,6 +5,7 @@ import torch
 import scipy
 from six import string_types
 from collections import Counter
+import MDAnalysis as mda
 
 mass_mapping = {'C': 12.011, 'N': 14.007, 'O': 15.999, 'P': 30.974, 'H': 1.008, 'S': 32.06}
 atomic_mapping = {'H': 1, 'C': 6, 'N': 7, 'O': 8, 'P': 15, 'S': 16}
@@ -50,6 +51,44 @@ def extract_mda_info(protein, stride=1):
     segment_counts = count_segments(protein_residues.resids)
 
     return positions, np.array(atomic_numbers), np.array(segment_counts)
+
+
+def extract_mda_info_folder(folder, top_file,stride=1):
+    r"""
+    do the extraction for all the files in the folder
+
+    Args:
+    - folder: str
+        The folder containing the .dcd files
+    - top_file: str
+        The topology file
+    - stride: int, default = 1
+        The stride to use when extracting the data
+
+    Returns:
+    - position_list: list
+        The list of positions for each trajectory
+    - atomic_numbers: ndarray
+        The atomic numbers of the atoms
+    - segment_counts: ndarray
+        The number counts for each segment
+    - dcd_files: list
+        The list of dcd files in the folder (important for the order of the trajectories)
+    """
+
+    # Get all the .dcd files in the folder
+    dcd_files = [f for f in os.listdir(folder) if f.endswith('.dcd')]
+    dcd_files.sort()
+
+    position_list = []
+    for traj in dcd_files:
+        print(f'Processing {traj}')
+        u = mda.Universe(top_file, os.path.join(folder, traj))
+        positions, atomic_numbers, segment_counts = extract_mda_info(u, stride=stride)
+        position_list.append(positions)
+
+    return position_list, atomic_numbers, segment_counts, dcd_files
+
 
 
 def set_random_seed(seed):
