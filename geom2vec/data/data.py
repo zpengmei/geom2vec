@@ -35,7 +35,6 @@ class Preprocessing:
                 data[i] = data[i].astype(self._dtype)
 
         else:
-            data = data.copy()
             if not isinstance(data, list):
                 data = [data]
             for i in range(len(data)):
