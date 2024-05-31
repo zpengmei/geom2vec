@@ -23,7 +23,7 @@ def create_model(model_type,
     elif model_type == 'vis':
         from geom2vec.representation_models.visnet import ViSNet
         model = ViSNet(hidden_channels=hidden_channels, cutoff=cutoff, num_rbf=num_rbf, vecnorm_type='max_min',
-                       trainable_vecnorm=True).to(device)
+                       trainable_vecnorm=True)
     elif model_type == 'tn':
         from geom2vec.representation_models.torchmd.main_model import get_args, create_model
         args = get_args(hidden_channels, num_layers, num_rbf, num_heads=8, cutoff=cutoff, rep_model='tensornet')
@@ -33,7 +33,7 @@ def create_model(model_type,
     model.load_state_dict(checkpoint, strict=False)
     model.eval()
 
-    return model
+    return model.to(device)
 
 
 def infer_traj(
