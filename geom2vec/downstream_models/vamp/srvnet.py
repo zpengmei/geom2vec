@@ -6,9 +6,7 @@ from .dataprocessing import Postprocessing_vac
 
 
 class SRVNet_Estimator:
-
     def __init__(self):
-
         self._score = None
         self._eigenvalues = None
 
@@ -20,37 +18,35 @@ class SRVNet_Estimator:
     @property
     def loss(self):
         if not self._is_fitted:
-            raise ValueError('please fit the model first')
+            raise ValueError("please fit the model first")
         else:
             return -self._score
 
     @property
     def score(self):
         if not self._is_fitted:
-            raise ValueError('please fit the model first')
+            raise ValueError("please fit the model first")
         else:
             return self._score
 
     @property
     def eigenvalues(self):
         if not self._is_fitted:
-            raise ValueError('please fit the model first')
+            raise ValueError("please fit the model first")
         else:
             return self._eigenvalues.flip(dims=[0])
 
     def fit(self, data):
-
         assert len(data) == 2
 
         c_tilde = estimate_c_tilde_matrix(data[0], data[1])
         self._eigenvalues, _ = torch.linalg.eigh(c_tilde)
-        self._score = torch.sum(self._eigenvalues ** 2) + 1
+        self._score = torch.sum(self._eigenvalues**2) + 1
         self._is_fitted = True
 
         return self
 
     def save(self):
-
         with torch.no_grad():
             # self._score_list.append(self.score.cpu().numpy())
             # self._eigenvalues_list.append(self.eigenvalues.cpu().numpy())
@@ -60,21 +56,18 @@ class SRVNet_Estimator:
         return self
 
     def clear(self):
-
         self._score_list = []
         self._eigenvalues_list = []
 
         return self
 
     def output_mean_score(self):
-
         # mean_score = np.mean(np.stack(self._score_list), axis=0)
         mean_score = torch.mean(torch.stack(self._score_list))
 
         return mean_score
 
     def output_mean_eigenvalues(self):
-
         # mean_eigenvalues = np.mean(np.stack(self._eigenvalues_list), axis=0)
         mean_eigenvalues = torch.mean(torch.stack(self._eigenvalues_list), axis=0)
 
@@ -82,7 +75,7 @@ class SRVNet_Estimator:
 
 
 class SRVNet_Model:
-    """ The SRVNet model from SRVNet estimator.
+    """The SRVNet model from SRVNet estimator.
 
     Parameters
     ----------
@@ -95,7 +88,6 @@ class SRVNet_Model:
     """
 
     def __init__(self, lobe, device=None, dtype=np.float32):
-
         self._lobe = lobe
         if dtype == np.float32:
             self._lobe = self._lobe.float()
@@ -110,7 +102,7 @@ class SRVNet_Model:
         return self._lobe
 
     def transform(self, data, return_cv=False, lag_time=None):
-        """ Transform the data through the trained networks.
+        """Transform the data through the trained networks.
 
         Parameters
         ----------
@@ -123,7 +115,7 @@ class SRVNet_Model:
 
         lag_time : int, default = None
             If return_cv is true, lag_time is required.
-            
+
         Returns
         -------
         output : array_like
@@ -141,7 +133,7 @@ class SRVNet_Model:
             return output if len(output) > 1 else output[0]
         else:
             if lag_time is None:
-                raise ValueError('Please input the lag time for transformation to CVs')
+                raise ValueError("Please input the lag time for transformation to CVs")
             else:
                 post = Postprocessing_vac(lag_time=lag_time, dtype=self._dtype)
                 output_cv = post.fit_transform(output)
@@ -149,7 +141,7 @@ class SRVNet_Model:
 
 
 class SRVNet:
-    """ The method used to train the SRVnets.
+    """The method used to train the SRVnets.
 
     Parameters
     ----------
@@ -170,9 +162,16 @@ class SRVNet:
         The data type of the input data and the parameters of the model.
     """
 
-    def __init__(self, lobe, optimizer='Adam', device=None, learning_rate=5e-4,
-                 epsilon=1e-6, dtype=np.float32, save_model_interval=None):
-
+    def __init__(
+        self,
+        lobe,
+        optimizer="Adam",
+        device=None,
+        learning_rate=5e-4,
+        epsilon=1e-6,
+        dtype=np.float32,
+        save_model_interval=None,
+    ):
         self._lobe = lobe
         self._device = device
         self._learning_rate = learning_rate
@@ -187,11 +186,19 @@ class SRVNet:
 
         self._step = 0
         self._save_models = []
-        self.optimizer_types = {'Adam': torch.optim.Adam, 'SGD': torch.optim.SGD, 'RMSprop': torch.optim.RMSprop}
+        self.optimizer_types = {
+            "Adam": torch.optim.Adam,
+            "SGD": torch.optim.SGD,
+            "RMSprop": torch.optim.RMSprop,
+        }
         if optimizer not in self.optimizer_types.keys():
-            raise ValueError(f"Unknown optimizer type, supported types are {self.optimizer_types.keys()}")
+            raise ValueError(
+                f"Unknown optimizer type, supported types are {self.optimizer_types.keys()}"
+            )
         else:
-            self._optimizer = self.optimizer_types[optimizer](self._lobe.parameters(), lr=learning_rate)
+            self._optimizer = self.optimizer_types[optimizer](
+                self._lobe.parameters(), lr=learning_rate
+            )
 
         self._training_scores = []
         self._validation_scores = []
@@ -217,7 +224,7 @@ class SRVNet:
         return np.array(self._validation_eigenvalues)
 
     def partial_fit(self, data):
-        """ Performs a partial fit on data. This does not perform any batching.
+        """Performs a partial fit on data. This does not perform any batching.
 
         Parameters
         ----------
@@ -243,18 +250,20 @@ class SRVNet:
         self._optimizer.step()
 
         self._training_scores.append((-loss).item())
-        self._training_eigenvalues.append((self._estimator.eigenvalues.detach().cpu().numpy()))
+        self._training_eigenvalues.append(
+            (self._estimator.eigenvalues.detach().cpu().numpy())
+        )
         self._step += 1
 
         return self
 
     def validate(self, val_data):
-        """ Evaluates the currently set lobe(s) on validation data and returns the value of the configured score.
+        """Evaluates the currently set lobe(s) on validation data and returns the value of the configured score.
 
         Parameters
         ----------
         val_data : tuple or list of length 2, containing instantaneous and time-lagged validation data.
-        
+
         Returns
         -------
         score : torch.Tensor
@@ -275,7 +284,7 @@ class SRVNet:
         return score
 
     def fit(self, train_loader, n_epochs=1, validation_loader=None, progress=tqdm):
-        """ Performs fit on data.
+        """Performs fit on data.
 
         Parameters
         ----------
@@ -294,15 +303,23 @@ class SRVNet:
 
         self._step = 0
 
-        for epoch in progress(range(n_epochs), desc="epoch", total=n_epochs, leave=False):
-
+        for epoch in progress(
+            range(n_epochs), desc="epoch", total=n_epochs, leave=False
+        ):
             for batch_0, batch_1 in train_loader:
-                self.partial_fit((batch_0.to(device=self._device), batch_1.to(device=self._device)))
+                self.partial_fit(
+                    (batch_0.to(device=self._device), batch_1.to(device=self._device))
+                )
 
             if validation_loader is not None:
                 with torch.no_grad():
                     for val_batch_0, val_batch_1 in validation_loader:
-                        self.validate((val_batch_0.to(device=self._device), val_batch_1.to(device=self._device)))
+                        self.validate(
+                            (
+                                val_batch_0.to(device=self._device),
+                                val_batch_1.to(device=self._device),
+                            )
+                        )
 
                     mean_score = self._estimator.output_mean_score()
                     mean_eigenvalues = self._estimator.output_mean_eigenvalues()
@@ -322,7 +339,7 @@ class SRVNet:
         return self
 
     def transform(self, data, return_cv=False, lag_time=None):
-        """ Transform the data through the trained networks.
+        """Transform the data through the trained networks.
 
         Parameters
         ----------
@@ -346,7 +363,7 @@ class SRVNet:
         return model.transform(data, return_cv=return_cv, lag_time=lag_time)
 
     def fetch_model(self) -> SRVNet_Model:
-        """ Yields the current model.
+        """Yields the current model.
 
         Returns
         -------
@@ -355,5 +372,6 @@ class SRVNet:
         """
 
         from copy import deepcopy
+
         lobe = deepcopy(self._lobe)
         return SRVNet_Model(lobe, device=self._device, dtype=self._dtype)

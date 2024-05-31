@@ -23,11 +23,11 @@ class GatedEquivariantBlock(torch.nn.Module):
     """
 
     def __init__(
-            self,
-            hidden_channels: int,
-            out_channels: int,
-            intermediate_channels: Optional[int] = None,
-            scalar_activation: bool = False,
+        self,
+        hidden_channels: int,
+        out_channels: int,
+        intermediate_channels: Optional[int] = None,
+        scalar_activation: bool = False,
     ) -> None:
         super().__init__()
         self.out_channels = out_channels
@@ -91,18 +91,20 @@ class EquivariantScalar(torch.nn.Module):
     def __init__(self, hidden_channels: int, out_channels: int) -> None:
         super().__init__()
 
-        self.output_network = torch.nn.ModuleList([
-            GatedEquivariantBlock(
-                hidden_channels,
-                hidden_channels,
-                scalar_activation=True,
-            ),
-            GatedEquivariantBlock(
-                hidden_channels,
-                out_channels,
-                scalar_activation=False,
-            ),
-        ])
+        self.output_network = torch.nn.ModuleList(
+            [
+                GatedEquivariantBlock(
+                    hidden_channels,
+                    hidden_channels,
+                    scalar_activation=True,
+                ),
+                GatedEquivariantBlock(
+                    hidden_channels,
+                    out_channels,
+                    scalar_activation=False,
+                ),
+            ]
+        )
 
         self.reset_parameters()
 
@@ -140,15 +142,15 @@ class MLP(torch.nn.Module):
 
     """
 
-    def __init__(self,
-                 input_channels: int,
-                 hidden_channels: int,
-                 out_channels: int,
-                 num_layers: int,
-                 out_activation: Optional[torch.nn.Module] = None,
-                 ) -> None:
+    def __init__(
+        self,
+        input_channels: int,
+        hidden_channels: int,
+        out_channels: int,
+        num_layers: int,
+        out_activation: Optional[torch.nn.Module] = None,
+    ) -> None:
         super(MLP, self).__init__()
-
 
         self.layers = torch.nn.ModuleList()
         self.layers.append(torch.nn.Linear(input_channels, hidden_channels))

@@ -5,7 +5,7 @@ from geom2vec.data.data import Preprocessing
 
 
 class Postprocessing_vac(Preprocessing):
-    """ Transform the outputs from neural networks to slow CVs.
+    """Transform the outputs from neural networks to slow CVs.
         Note that this method force the detailed balance constraint,
         which can be used to process the simulation data with sufficient sampling.
 
@@ -17,8 +17,8 @@ class Postprocessing_vac(Preprocessing):
     dtype : dtype, default = np.float32
 
     shrinkage : boolean, default = True
-        To tell whether to do the shrinkaged estimation of covariance matrix. 
-    
+        To tell whether to do the shrinkaged estimation of covariance matrix.
+
     n_dims : int, default = None
         The number of slow collective variables to obtain.
     """
@@ -55,29 +55,29 @@ class Postprocessing_vac(Preprocessing):
     @property
     def mean(self):
         if not self._is_fitted:
-            raise ValueError('please fit the model first')
+            raise ValueError("please fit the model first")
         return self._mean
 
     @property
     def eigenvalues(self):
         if not self._is_fitted:
-            raise ValueError('please fit the model first')
+            raise ValueError("please fit the model first")
         return self._eigenvalues
 
     @property
     def eigenvectors(self):
         if not self._is_fitted:
-            raise ValueError('please fit the model first')
+            raise ValueError("please fit the model first")
         return self._eigenvectors
 
     @property
     def time_scales(self):
         if not self._is_fitted:
-            raise ValueError('please fit the model first')
+            raise ValueError("please fit the model first")
         return self._time_scales
 
     def fit(self, data):
-        """ Fit the model for transformation.
+        """Fit the model for transformation.
 
         Parameters
         ----------
@@ -92,28 +92,26 @@ class Postprocessing_vac(Preprocessing):
         return self
 
     def _cal_mean(self, data):
-
         dataset = self.create_dataset(data, self._lag_time)
 
-        if self._torch_or_numpy == 'torch':
+        if self._torch_or_numpy == "torch":
             d0, d1 = map(torch.tensor, zip(*dataset))
         else:
             d0, d1 = map(np.array, zip(*dataset))
 
-        mean = (d0.mean(0) + d1.mean(0)) / 2.
+        mean = (d0.mean(0) + d1.mean(0)) / 2.0
 
-        if self._torch_or_numpy == 'torch':
+        if self._torch_or_numpy == "torch":
             mean = mean.numpy()
 
         return mean
 
     def _cal_cov_matrices(self, data):
-
         num_trajs = 1 if not isinstance(data, list) else len(data)
         dataset = self.create_dataset(data, self._lag_time)
 
         batch_size = len(dataset)
-        if self._torch_or_numpy == 'numpy':
+        if self._torch_or_numpy == "numpy":
             d0, d1 = map(np.array, zip(*dataset))
 
             mean = 0.5 * (d0.mean(0) + d1.mean(0))
@@ -121,10 +119,10 @@ class Postprocessing_vac(Preprocessing):
             d0_rm = d0 - mean
             d1_rm = d1 - mean
 
-            c00 = 1. / batch_size * np.dot(d0_rm.T, d0_rm)
-            c11 = 1. / batch_size * np.dot(d1_rm.T, d1_rm)
-            c01 = 1. / batch_size * np.dot(d0_rm.T, d1_rm)
-            c10 = 1. / batch_size * np.dot(d1_rm.T, d0_rm)
+            c00 = 1.0 / batch_size * np.dot(d0_rm.T, d0_rm)
+            c11 = 1.0 / batch_size * np.dot(d1_rm.T, d1_rm)
+            c01 = 1.0 / batch_size * np.dot(d0_rm.T, d1_rm)
+            c10 = 1.0 / batch_size * np.dot(d1_rm.T, d0_rm)
 
             c0 = 0.5 * (c00 + c11)
             c1 = 0.5 * (c01 + c10)
@@ -137,10 +135,10 @@ class Postprocessing_vac(Preprocessing):
             d0_rm = d0 - mean
             d1_rm = d1 - mean
 
-            c00 = 1. / batch_size * torch.matmul(d0_rm.T, d0_rm)
-            c11 = 1. / batch_size * torch.matmul(d1_rm.T, d1_rm)
-            c01 = 1. / batch_size * torch.matmul(d0_rm.T, d1_rm)
-            c10 = 1. / batch_size * torch.matmul(d1_rm.T, d0_rm)
+            c00 = 1.0 / batch_size * torch.matmul(d0_rm.T, d0_rm)
+            c11 = 1.0 / batch_size * torch.matmul(d1_rm.T, d1_rm)
+            c01 = 1.0 / batch_size * torch.matmul(d0_rm.T, d1_rm)
+            c10 = 1.0 / batch_size * torch.matmul(d1_rm.T, d0_rm)
 
             c0 = 0.5 * (c00 + c11)
             c1 = 0.5 * (c01 + c10)
@@ -155,7 +153,6 @@ class Postprocessing_vac(Preprocessing):
         return c0, c1
 
     def _cal_eigvals_eigvecs(self, data):
-
         c0, c1 = self._cal_cov_matrices(data)
 
         if isinstance(c0, torch.Tensor):
@@ -163,13 +160,14 @@ class Postprocessing_vac(Preprocessing):
             c1 = c1.numpy()
 
         import scipy.linalg
+
         eigvals, eigvecs = scipy.linalg.eigh(c1, b=c0)
 
         idx = np.argsort(eigvals)[::-1]
 
         if self._n_dims is not None:
             assert self._n_dims <= len(idx)
-            idx = idx[:self._n_dims]
+            idx = idx[: self._n_dims]
 
         eigvals = eigvals[idx]
         eigvecs = eigvecs[:, idx]
@@ -177,7 +175,7 @@ class Postprocessing_vac(Preprocessing):
         return eigvals, eigvecs
 
     def transform(self, data):
-        """ Transfrom the basis funtions (or outputs of neural networks) to the slow CVs.
+        """Transfrom the basis funtions (or outputs of neural networks) to the slow CVs.
             Note that the model must be fitted first before transformation.
 
         Parameters
@@ -198,7 +196,7 @@ class Postprocessing_vac(Preprocessing):
         data = self._seq_trajs(data)
         num_trajs = len(data)
 
-        if self._torch_or_numpy == 'torch':
+        if self._torch_or_numpy == "torch":
             for i in range(num_trajs):
                 x_rm = data[i] - self._mean
                 x_rm = x_rm.numpy()
@@ -211,7 +209,7 @@ class Postprocessing_vac(Preprocessing):
         return modes if num_trajs > 1 else modes[0]
 
     def fit_transform(self, data):
-        """ Fit the model and transfrom to the slow CVs.
+        """Fit the model and transfrom to the slow CVs.
 
         Parameters
         ----------
@@ -228,7 +226,7 @@ class Postprocessing_vac(Preprocessing):
         return modes
 
     def gmrq(self, data):
-        """ Score the model based on generalized matrix Rayleigh quotient.
+        """Score the model based on generalized matrix Rayleigh quotient.
             Note that the model should be fitted before computing computing GMRQ score.
 
         Parameters
@@ -251,7 +249,7 @@ class Postprocessing_vac(Preprocessing):
         ### Q: use the mean of fitted data or input data?
         S, C = self._cal_cov_matrices(data)
 
-        if self._torch_or_numpy == 'torch':
+        if self._torch_or_numpy == "torch":
             A = A.numpy()
             S = S.numpy()
             C = C.numpy()
@@ -264,7 +262,7 @@ class Postprocessing_vac(Preprocessing):
         return score
 
     def empirical_correlation(self, data):
-        """ Score the model based on empirical correlations between the instantaneous and time-lagged slowest CVs.
+        """Score the model based on empirical correlations between the instantaneous and time-lagged slowest CVs.
             Note that the model should be fitted before computing empirical correlations.
             The empirical correlations equal to eigenvalues for the fitted equilibrium dataset.
 
@@ -280,19 +278,20 @@ class Postprocessing_vac(Preprocessing):
 
         modes = self.transform(data)
 
-        if self._torch_or_numpy == 'torch':
+        if self._torch_or_numpy == "torch":
             modes = modes.numpy()
 
         dataset = self.create_dataset(modes, self._lag_time)
 
-        if self._torch_or_numpy == 'torch':
+        if self._torch_or_numpy == "torch":
             modes0, modes1 = map(torch.tensor, zip(*dataset))
 
             modes0_rm = modes0 - modes0.mean(0)
             modes1_rm = modes1 - modes1.mean(0)
 
             corr = torch.mean(modes0_rm * modes1_rm, dim=0) / (
-                    torch.std(modes0_rm, dim=0) * torch.std(modes1_rm, dim=0))
+                torch.std(modes0_rm, dim=0) * torch.std(modes1_rm, dim=0)
+            )
 
             corr = corr.numpy()
 
@@ -303,13 +302,14 @@ class Postprocessing_vac(Preprocessing):
             modes1_rm = modes1 - np.mean(modes1, axis=0)
 
             corr = np.mean(modes0_rm * modes1_rm, axis=0) / (
-                    np.std(modes0_rm, axis=0) * np.std(modes1_rm, axis=0))
+                np.std(modes0_rm, axis=0) * np.std(modes1_rm, axis=0)
+            )
 
         return corr
 
 
 class Postprocessing_vamp(Preprocessing):
-    """ Transform the outputs from neural networks to slow CVs.
+    """Transform the outputs from neural networks to slow CVs.
         Note that this method doesn't force the detailed balance constraint,
         which can be used to process the simulation data with insufficient sampling.
 
@@ -319,7 +319,7 @@ class Postprocessing_vamp(Preprocessing):
         The lag time used for transformation.
 
     dtype : dtype, default = np.float32
-    
+
     n_dims : int, default = None
         The number of slow collective variables to obtain.
     """
@@ -349,41 +349,41 @@ class Postprocessing_vamp(Preprocessing):
     @property
     def mean_0(self):
         if not self._is_fitted:
-            raise ValueError('please fit the model first')
+            raise ValueError("please fit the model first")
         return self._mean_0
 
     @property
     def mean_t(self):
         if not self._is_fitted:
-            raise ValueError('please fit the model first')
+            raise ValueError("please fit the model first")
         return self._mean_t
 
     @property
     def singularvalues(self):
         if not self._is_fitted:
-            raise ValueError('please fit the model first')
+            raise ValueError("please fit the model first")
         return self._singularvalues
 
     @property
     def left_singularvectors(self):
         if not self._is_fitted:
-            raise ValueError('please fit the model first')
+            raise ValueError("please fit the model first")
         return self._left_singularvectors
 
     @property
     def right_singularvectors(self):
         if not self._is_fitted:
-            raise ValueError('please fit the model first')
+            raise ValueError("please fit the model first")
         return self._right_singularvectors
 
     @property
     def time_scales(self):
         if not self._is_fitted:
-            raise ValueError('please fit the model first')
+            raise ValueError("please fit the model first")
         return self._time_scales
 
     def fit(self, data):
-        """ Fit the model for transformation.
+        """Fit the model for transformation.
 
         Parameters
         ----------
@@ -391,8 +391,11 @@ class Postprocessing_vamp(Preprocessing):
         """
 
         self._mean_0, self._mean_t = self._cal_mean(data)
-        self._singularvalues, self._left_singularvectors, self._right_singularvectors = self._cal_singularvals_singularvecs(
-            data)
+        (
+            self._singularvalues,
+            self._left_singularvectors,
+            self._right_singularvectors,
+        ) = self._cal_singularvals_singularvecs(data)
         self._time_scales = -self._lag_time / np.log(np.abs(self._singularvalues))
 
         self._is_fitted = True
@@ -400,11 +403,11 @@ class Postprocessing_vamp(Preprocessing):
         return self
 
     def _inv_sqrt(self, cov_matrix):
-
         if isinstance(cov_matrix, torch.Tensor):
             cov_matrix = cov_matrix.numpy()
 
         import numpy.linalg
+
         cov_matrix = 0.5 * (cov_matrix + cov_matrix.T)
 
         eigvals, eigvecs = numpy.linalg.eigh(cov_matrix)
@@ -419,9 +422,8 @@ class Postprocessing_vamp(Preprocessing):
         return inv_sqrt
 
     def _cal_mean(self, data):
-
         dataset = self.create_dataset(data, self._lag_time)
-        if self._torch_or_numpy == 'torch':
+        if self._torch_or_numpy == "torch":
             d0, d1 = map(torch.tensor, zip(*dataset))
             d0 = d0.numpy()
             d1 = d1.numpy()
@@ -431,20 +433,19 @@ class Postprocessing_vamp(Preprocessing):
         return d0.mean(0), d1.mean(0)
 
     def _cal_cov_matrices(self, data):
-
         dataset = self.create_dataset(data, self._lag_time)
 
         batch_size = len(dataset)
 
-        if self._torch_or_numpy == 'torch':
+        if self._torch_or_numpy == "torch":
             d0, d1 = map(torch.tensor, zip(*dataset))
 
             d0_rm = d0 - d0.mean(0)
             d1_rm = d1 - d1.mean(0)
 
-            c00 = 1. / batch_size * torch.matmul(d0_rm.T, d0_rm)
-            c11 = 1. / batch_size * torch.matmul(d1_rm.T, d1_rm)
-            c01 = 1. / batch_size * torch.matmul(d0_rm.T, d1_rm)
+            c00 = 1.0 / batch_size * torch.matmul(d0_rm.T, d0_rm)
+            c11 = 1.0 / batch_size * torch.matmul(d1_rm.T, d1_rm)
+            c01 = 1.0 / batch_size * torch.matmul(d0_rm.T, d1_rm)
 
             c00 = c00.numpy()
             c11 = c11.numpy()
@@ -456,14 +457,13 @@ class Postprocessing_vamp(Preprocessing):
             d0_rm = d0 - d0.mean(0)
             d1_rm = d1 - d1.mean(0)
 
-            c00 = 1. / batch_size * np.dot(d0_rm.T, d0_rm)
-            c11 = 1. / batch_size * np.dot(d1_rm.T, d1_rm)
-            c01 = 1. / batch_size * np.dot(d0_rm.T, d1_rm)
+            c00 = 1.0 / batch_size * np.dot(d0_rm.T, d0_rm)
+            c11 = 1.0 / batch_size * np.dot(d1_rm.T, d1_rm)
+            c01 = 1.0 / batch_size * np.dot(d0_rm.T, d1_rm)
 
         return c00, c01, c11
 
     def _cal_singularvals_singularvecs(self, data):
-
         c00, c01, c11 = self._cal_cov_matrices(data)
 
         c00_inv_sqrt = self._inv_sqrt(c00)
@@ -472,7 +472,8 @@ class Postprocessing_vamp(Preprocessing):
         ks = np.dot(c00_inv_sqrt.T, c01).dot(c11_inv_sqrt)
 
         import scipy.linalg
-        U, s, Vh = scipy.linalg.svd(ks, compute_uv=True, lapack_driver='gesvd')
+
+        U, s, Vh = scipy.linalg.svd(ks, compute_uv=True, lapack_driver="gesvd")
 
         left = np.dot(c00_inv_sqrt, U)
         right = np.dot(c11_inv_sqrt, Vh.T)
@@ -481,7 +482,7 @@ class Postprocessing_vamp(Preprocessing):
 
         if self._n_dims is not None:
             assert self._n_dims <= len(idx)
-            idx = idx[:self._n_dims]
+            idx = idx[: self._n_dims]
 
         s = s[idx]
         left = left[:, idx]
@@ -490,7 +491,7 @@ class Postprocessing_vamp(Preprocessing):
         return s, left, right
 
     def transform(self, data, instantaneous=True):
-        """ Transfrom the basis funtions (or outputs of neural networks) to the slow CVs.
+        """Transfrom the basis funtions (or outputs of neural networks) to the slow CVs.
             Note that the model must be fitted first before transformation.
 
         Parameters
@@ -518,16 +519,20 @@ class Postprocessing_vamp(Preprocessing):
         if instantaneous:
             for i in range(num_trajs):
                 x_rm = data[i] - self._mean_0
-                modes.append(np.dot(x_rm, self._left_singularvectors).astype(np.float32))
+                modes.append(
+                    np.dot(x_rm, self._left_singularvectors).astype(np.float32)
+                )
         else:
             for i in range(num_trajs):
                 x_rm = data[i] - self._mean_t
-                modes.append(np.dot(x_rm, self._right_singularvectors).astype(np.float32))
+                modes.append(
+                    np.dot(x_rm, self._right_singularvectors).astype(np.float32)
+                )
 
         return modes if num_trajs > 1 else modes[0]
 
     def fit_transform(self, data, instantanuous=True):
-        """ Fit the model and transfrom to the slow CVs.
+        """Fit the model and transfrom to the slow CVs.
 
         Parameters
         ----------

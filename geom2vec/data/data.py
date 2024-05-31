@@ -5,27 +5,26 @@ from tqdm import tqdm
 
 
 class Preprocessing:
-    """ Preprocess the original trajectories to create datasets for training.
+    """Preprocess the original trajectories to create datasets for training.
 
     Parameters
     ----------
     dtype : dtype, default = float
     """
 
-    def __init__(self,
-                 torch_or_numpy='numpy',
-                 ):
-
+    def __init__(
+        self,
+        torch_or_numpy="numpy",
+    ):
         self._torch_or_numpy = torch_or_numpy
 
-        if torch_or_numpy == 'torch':
+        if torch_or_numpy == "torch":
             self._dtype = torch.float32
         else:
             self._dtype = np.float32
 
     def _seq_trajs(self, data):
-
-        if self._torch_or_numpy == 'numpy':
+        if self._torch_or_numpy == "numpy":
             data = data.copy()
             if not isinstance(data, list):
                 data = [data]
@@ -44,7 +43,7 @@ class Preprocessing:
         return data
 
     def create_time_lagged_dataset(self, data, lag_time):
-        """ Create a time-lagged dataset.
+        """Create a time-lagged dataset.
 
         Parameters
         ----------
@@ -73,8 +72,8 @@ class Preprocessing:
 
         return dataset
 
-    def create_boundary_dataset(self,data, ina, inb):
-        """ Create a dataset for the boundary condition.
+    def create_boundary_dataset(self, data, ina, inb):
+        """Create a dataset for the boundary condition.
 
         Parameters
         ----------
@@ -107,8 +106,8 @@ class Preprocessing:
 
         return dataset
 
-    def load_dataset(self,data_path, mmap_mode='r'):
-        """ Load the dataset from the file.
+    def load_dataset(self, data_path, mmap_mode="r"):
+        """Load the dataset from the file.
 
         Parameters
         ----------
@@ -126,23 +125,27 @@ class Preprocessing:
 
         # iterate over the .npz files and load the data
 
-        assert mmap_mode in ['r', 'r+', 'w+', 'c', None]
+        assert mmap_mode in ["r", "r+", "w+", "c", None]
 
-        if self._torch_or_numpy == 'torch':
+        if self._torch_or_numpy == "torch":
             files = os.listdir(data_path)
-            files = [os.path.join(data_path,f) for f in files if f.endswith('.pt')]
-            files = sorted(files,key=lambda x: int(x.split('_')[-1].split('.')[0]))
+            files = [os.path.join(data_path, f) for f in files if f.endswith(".pt")]
+            files = sorted(files, key=lambda x: int(x.split("_")[-1].split(".")[0]))
 
         else:
             files = os.listdir(data_path)
-            files = [os.path.join(data_path,f) for f in files if f.endswith('.npz')]
-            files = sorted(files,key=lambda x: int(x.split('_')[-1].split('.')[0]))
+            files = [os.path.join(data_path, f) for f in files if f.endswith(".npz")]
+            files = sorted(files, key=lambda x: int(x.split("_")[-1].split(".")[0]))
 
         data = []
         for file in tqdm(files):
-            if self._torch_or_numpy == 'torch':
-                data.append(torch.load(file, map_location='cpu', mmap=mmap_mode).to(self._dtype))
+            if self._torch_or_numpy == "torch":
+                data.append(
+                    torch.load(file, map_location="cpu", mmap=mmap_mode).to(self._dtype)
+                )
             else:
-                data.append(np.load(file, mmap_mode=mmap_mode)['arr_0'].astype(self._dtype))
+                data.append(
+                    np.load(file, mmap_mode=mmap_mode)["arr_0"].astype(self._dtype)
+                )
 
         return data

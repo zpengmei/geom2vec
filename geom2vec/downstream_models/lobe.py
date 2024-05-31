@@ -6,35 +6,35 @@ from typing import Optional
 
 
 class lobe(torch.nn.Module):
-
-    def __init__(self,
-                 # general parameters
-                 hidden_channels: int,
-                 intermediate_channels: int,
-                 output_channels: int,
-                 num_layers,
-                 batch_norm=False,
-                 vector_feature=True,
-                 mlp_dropout=0.0,
-                 mlp_out_activation=Optional[nn.Module],
-                 # mixer parameters
-                 token_mixer='None',  # None, subformer, submixer
-                 num_mixer_layers=4,  # number of layers for transformer or mlp-mixer
-                 expansion_factor=2,  # expansion factor for transformer FF
-                 nhead=8,  # number of heads for transformer
-                 pooling='cls',  # cls, mean, sum
-                 dropout=0.1,  # dropout for mlp-mixer and transformer
-                 attn_map=False,  # whether to return attention map of transformer
-                 num_tokens=1,  # number of tokens for mlp-mixer
-                 token_dim=64,  # dimension of tokens for mlpixer
-                 ):
+    def __init__(
+        self,
+        # general parameters
+        hidden_channels: int,
+        intermediate_channels: int,
+        output_channels: int,
+        num_layers,
+        batch_norm=False,
+        vector_feature=True,
+        mlp_dropout=0.0,
+        mlp_out_activation=Optional[nn.Module],
+        # mixer parameters
+        token_mixer="None",  # None, subformer, submixer
+        num_mixer_layers=4,  # number of layers for transformer or mlp-mixer
+        expansion_factor=2,  # expansion factor for transformer FF
+        nhead=8,  # number of heads for transformer
+        pooling="cls",  # cls, mean, sum
+        dropout=0.1,  # dropout for mlp-mixer and transformer
+        attn_map=False,  # whether to return attention map of transformer
+        num_tokens=1,  # number of tokens for mlp-mixer
+        token_dim=64,  # dimension of tokens for mlpixer
+    ):
         super(lobe, self).__init__()
 
-        assert token_mixer in ['None', 'subformer', 'submixer']
-        assert pooling in ['cls', 'mean', 'sum']
+        assert token_mixer in ["None", "subformer", "submixer"]
+        assert pooling in ["cls", "mean", "sum"]
 
-        if token_mixer == 'submixer' and pooling == 'cls':
-            raise ValueError('Submixer does not support cls pooling')
+        if token_mixer == "submixer" and pooling == "cls":
+            raise ValueError("Submixer does not support cls pooling")
 
         self.pooling = pooling
 
@@ -42,13 +42,17 @@ class lobe(torch.nn.Module):
         self.vector_feature = vector_feature
         self.dropout = torch.nn.Dropout(mlp_dropout)
 
-        self.input_projection = EquivariantScalar(hidden_channels, intermediate_channels)
+        self.input_projection = EquivariantScalar(
+            hidden_channels, intermediate_channels
+        )
         if not vector_feature:
-            self.input_projection = torch.nn.Linear(hidden_channels, intermediate_channels)
+            self.input_projection = torch.nn.Linear(
+                hidden_channels, intermediate_channels
+            )
 
-        if token_mixer == 'None':
+        if token_mixer == "None":
             self.mixer = None
-        elif token_mixer == 'subformer':
+        elif token_mixer == "subformer":
             self.mixer = SubFormer(
                 hidden_channels=intermediate_channels,
                 encoder_layers=num_mixer_layers,
@@ -56,9 +60,9 @@ class lobe(torch.nn.Module):
                 dim_feedforward=int(expansion_factor * intermediate_channels),
                 pool=pooling,
                 dropout=dropout,
-                attn_map=attn_map
+                attn_map=attn_map,
             )
-        elif token_mixer == 'submixer':
+        elif token_mixer == "submixer":
             self.mixer = SubMixer(
                 num_patch=num_tokens,
                 depth=num_mixer_layers,
@@ -66,7 +70,7 @@ class lobe(torch.nn.Module):
                 dim=intermediate_channels,
                 token_dim=token_dim,
                 channel_dim=intermediate_channels,
-                pooling=pooling
+                pooling=pooling,
             )
 
         self.output_projection = MLP(
@@ -74,7 +78,7 @@ class lobe(torch.nn.Module):
             hidden_channels=intermediate_channels,
             out_channels=output_channels,
             num_layers=num_layers,
-            out_activation=mlp_out_activation
+            out_activation=mlp_out_activation,
         )
 
         self.batch_norm = batch_norm
@@ -82,7 +86,6 @@ class lobe(torch.nn.Module):
             self.batchnorm = nn.BatchNorm1d(intermediate_channels)
 
     def forward(self, data):
-
         # several assumptions:
         # 1. if no mixer is used, input shape is (batch,4,hidden_channels)
         # 2. if mixer is used, input shape is (batch,token,4,hidden_channels)
@@ -91,7 +94,7 @@ class lobe(torch.nn.Module):
         assert data.shape[-2] == 4
 
         x = None
-        if self.token_mixer == 'None':
+        if self.token_mixer == "None":
             x_rep = data[:, 0, :]
             v_rep = data[:, 1:, :]
 
@@ -105,7 +108,7 @@ class lobe(torch.nn.Module):
                 x_rep = self.batchnorm(x_rep)
             x = self.output_projection(x_rep)
 
-        elif self.token_mixer == 'subformer':
+        elif self.token_mixer == "subformer":
             batch_size, num_nodes, _, _ = data.shape
             x_rep = data[:, :, 0, :].reshape(batch_size * num_nodes, -1)
             v_rep = data[:, :, 1:, :].reshape(batch_size * num_nodes, 3, -1)
@@ -117,7 +120,7 @@ class lobe(torch.nn.Module):
             x = self.mixer(x)
             x = self.output_projection(x)
 
-        elif self.token_mixer == 'submixer':
+        elif self.token_mixer == "submixer":
             batch_size, num_nodes, _, dim = data.shape
             x_rep = data[:, :, 0, :].reshape(batch_size * num_nodes, -1)
             v_rep = data[:, :, 1:, :].reshape(batch_size * num_nodes, 3, -1)
@@ -132,7 +135,7 @@ class lobe(torch.nn.Module):
         return x
 
     def fetch_attnmap(self, data):
-        assert self.token_mixer == 'subformer'
+        assert self.token_mixer == "subformer"
         batch_size, num_nodes, _, _ = data.shape
         x_rep = data[:, :, 0, :].reshape(batch_size * num_nodes, -1)
         v_rep = data[:, :, 1:, :].reshape(batch_size * num_nodes, 3, -1)
