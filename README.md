@@ -1,6 +1,6 @@
 # Geom2vec
 
-![scheme](.figs/scheme.jpg)
+![scheme](figs/scheme.jpg)
 
 Geom2Vec (Geometry-to-vector) is a framework for compute vector representation of molecular conformations using 
 pretrained graph neural networks (GNNs). The resulting vectors can be used for dimensionality reduction, committer
