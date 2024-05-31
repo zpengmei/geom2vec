@@ -23,8 +23,6 @@ class Preprocessing:
         else:
             self._dtype = np.float32
 
-        self._dtype = dtype
-
     def _seq_trajs(self, data):
 
         if self._torch_or_numpy == 'numpy':
