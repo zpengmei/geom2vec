@@ -20,6 +20,21 @@ Clone the repository and install the package using pip:
 ```bash
 pip install -e .
 ```
+## Package structure
+The package is organized as follows:
+- `geom2vec` contains the main classes and functions for the framework.
+- `checkpoints` contains the pretrained GNNs with different architectures.
+- `tutorial` contains basic tutorials for using the package.
+
+Under `geom2vec`:
+- `geom2vec.data` contains the data-relevant class and processing utils.
+- `geom2vec.downstream_models` contains models for downstream tasks, e.g., committer function estimation.
+- `geom2vec.layers` contains building blocks (MLPs and Token mixing layers) for the general network architecture.
+Instead, users should directly use the `geom2vec.downstream_models.lobe.lobe` class for best performance and convenience.
+- `geom2vec.pretrain` contains dataset classes and training scripts for pretraining the GNNs 
+in case users want to train their own models.
+- `geom2vec.representation_models` contains the main classes various GNN architectures 
+that can be used for representation learning.
 
 ## Tutorials
 
