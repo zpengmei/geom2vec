@@ -1,6 +1,6 @@
 from abc import abstractmethod, ABCMeta
 from typing import Optional
-from utils import act_class_mapping, GatedEquivariantBlock
+from .utils import act_class_mapping, GatedEquivariantBlock
 import torch
 from torch import nn
 
