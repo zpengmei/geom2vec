@@ -3,7 +3,7 @@ import torch
 from torch import nn
 from torch_geometric.nn import MessagePassing
 from torch_scatter import scatter
-from ssp.modules.models.representation_models.torchmd.utils import (
+from .utils import (
     NeighborEmbedding,
     CosineCutoff,
     Distance,

@@ -2,9 +2,9 @@ import re
 from typing import Optional, Tuple
 import torch
 from torch import nn
-from output_modules import EquivariantScalar
-from et import TorchMD_ET
-from tensornet import TensorNet
+from .output_modules import EquivariantScalar
+from .et import TorchMD_ET
+from .tensornet import TensorNet
 import warnings
 
 
