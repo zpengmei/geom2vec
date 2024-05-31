@@ -7,8 +7,8 @@ from six import string_types
 from collections import Counter
 import MDAnalysis as mda
 
-mass_mapping = {'C': 12.011, 'N': 14.007, 'O': 15.999, 'P': 30.974, 'H': 1.008, 'S': 32.06}
-atomic_mapping = {'H': 1, 'C': 6, 'N': 7, 'O': 8, 'P': 15, 'S': 16}
+mass_mapping = {'C': 12.011, 'N': 14.007, 'O': 15.999, 'P': 30.974, 'H': 1.008, 'S': 32.06, 'F': 18.998, 'Cl': 35.453}
+atomic_mapping = {'H': 1, 'C': 6, 'N': 7, 'O': 8, 'P': 15, 'S': 16, 'F': 9, 'Cl': 17}
 
 
 def count_segments(numbers):
@@ -54,7 +54,7 @@ def extract_mda_info(protein, stride=1, selection=None):
     return positions, np.array(atomic_numbers), np.array(segment_counts)
 
 
-def extract_mda_info_folder(folder, top_file,stride=1, selection=None):
+def extract_mda_info_folder(folder, top_file,stride=1, selection=None, file_postfix='.dcd'):
     r"""
     do the extraction for all the files in the folder
 
@@ -67,6 +67,8 @@ def extract_mda_info_folder(folder, top_file,stride=1, selection=None):
         The stride to use when extracting the data
     - selection: str, default = None
         The selection to use when extracting the data in MDAnalysis. If None, all atoms are selected except hydrogens.
+    - file_postfix: str, default = '.dcd'
+        The postfix of the files to be extracted
 
     Returns:
     - position_list: list
@@ -80,7 +82,7 @@ def extract_mda_info_folder(folder, top_file,stride=1, selection=None):
     """
 
     # Get all the .dcd files in the folder
-    dcd_files = [f for f in os.listdir(folder) if f.endswith('.dcd')]
+    dcd_files = [f for f in os.listdir(folder) if f.endswith(file_postfix)]
     dcd_files.sort()
 
     position_list = []
