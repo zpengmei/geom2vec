@@ -103,7 +103,7 @@ class Preprocessing:
         for k in range(num_trajs):
             L_all = data[k].shape[0]
             for i in range(L_all):
-                dataset.append((data[k][i, :], ina[k], inb[k]))
+                dataset.append((data[k][i, :], ina[k][i], inb[k][i]))
 
         return dataset
 
