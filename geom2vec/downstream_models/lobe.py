@@ -5,32 +5,32 @@ from geom2vec.layers.mixers import SubFormer, SubMixer
 from typing import Optional
 
 
-class lobe(torch.nn.Module):
+class Lobe(torch.nn.Module):
     def __init__(
         self,
         # general parameters
         hidden_channels: int,
         intermediate_channels: int,
         output_channels: int,
-        num_layers,
-        batch_norm=False,
-        vector_feature=True,
-        mlp_dropout=0.0,
+        num_layers: int,
+        batch_norm: bool = False,
+        vector_feature: bool = True,
+        mlp_dropout: float = 0.0,
         mlp_out_activation=Optional[nn.Module],
         # mixer parameters
-        token_mixer="None",  # None, subformer, submixer
-        num_mixer_layers=4,  # number of layers for transformer or mlp-mixer
-        expansion_factor=2,  # expansion factor for transformer FF
-        nhead=8,  # number of heads for transformer
-        pooling="cls",  # cls, mean, sum
-        dropout=0.1,  # dropout for mlp-mixer and transformer
-        attn_map=False,  # whether to return attention map of transformer
-        num_tokens=1,  # number of tokens for mlp-mixer
-        token_dim=64,  # dimension of tokens for mlpixer
+        token_mixer: str = "none",  # None, subformer, submixer
+        num_mixer_layers: int = 4,  # number of layers for transformer or mlp-mixer
+        expansion_factor: int = 2,  # expansion factor for transformer FF
+        nhead: int = 8,  # number of heads for transformer
+        pooling: str = "cls",  # cls, mean, sum
+        dropout: float = 0.1,  # dropout for mlp-mixer and transformer
+        attn_map: bool = False,  # whether to return attention map of transformer
+        num_tokens: int = 1,  # number of tokens for mlp-mixer
+        token_dim: int = 64,  # dimension of tokens for mlpixer
     ):
-        super(lobe, self).__init__()
+        super(Lobe, self).__init__()
 
-        assert token_mixer in ["None", "subformer", "submixer"]
+        assert token_mixer in ["none", "subformer", "submixer"]
         assert pooling in ["cls", "mean", "sum"]
 
         if token_mixer == "submixer" and pooling == "cls":
@@ -50,7 +50,7 @@ class lobe(torch.nn.Module):
                 hidden_channels, intermediate_channels
             )
 
-        if token_mixer == "None":
+        if token_mixer == "none":
             self.mixer = None
         elif token_mixer == "subformer":
             self.mixer = SubFormer(
@@ -94,7 +94,7 @@ class lobe(torch.nn.Module):
         assert data.shape[-2] == 4
 
         x = None
-        if self.token_mixer == "None":
+        if self.token_mixer == "none":
             x_rep = data[:, 0, :]
             v_rep = data[:, 1:, :]
 

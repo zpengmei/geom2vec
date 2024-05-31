@@ -90,7 +90,7 @@ class Preprocessing:
         -------
         dataset : list
             List of tuples: the length of the list represents the number of data.
-            Each tuple has three elements: one is the instantaneous data frame, the other two are the initial and final conditions.
+            Each tuple has three elements: one is the instantaneous data frame, the other two are the boundary conditions
         """
 
         data = self._seq_trajs(data)
