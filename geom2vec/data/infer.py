@@ -7,32 +7,71 @@ import os
 import MDAnalysis as mda
 from collections import Counter
 
-mass_mapping = {'C': 12.011, 'N': 14.007, 'O': 15.999, 'P': 30.974, 'H': 1.008, 'S': 32.06, 'F': 18.998, 'Cl': 35.453}
-atomic_mapping = {'H': 1, 'C': 6, 'N': 7, 'O': 8, 'P': 15, 'S': 16, 'F': 9, 'Cl': 17}
+mass_mapping = {
+    "C": 12.011,
+    "N": 14.007,
+    "O": 15.999,
+    "P": 30.974,
+    "H": 1.008,
+    "S": 32.06,
+    "F": 18.998,
+    "Cl": 35.453,
+}
+atomic_mapping = {"H": 1, "C": 6, "N": 7, "O": 8, "P": 15, "S": 16, "F": 9, "Cl": 17}
 
 
-def create_model(model_type,
-                 checkpoint_path,
-                 cutoff=7.5,
-                 hidden_channels=128,
-                 num_layers=6,
-                 num_rbf=64,
-                 device='cuda'):
-    assert model_type in ['et', 'vis', 'tn']  # only support ET, ViSNet, and TensorNet
+def create_model(
+    model_type,
+    checkpoint_path,
+    cutoff=7.5,
+    hidden_channels=128,
+    num_layers=6,
+    num_rbf=64,
+    device="cuda",
+):
+    assert model_type in ["et", "vis", "tn"]  # only support ET, ViSNet, and TensorNet
 
     model = None
 
-    if model_type == 'et':
-        from geom2vec.representation_models.torchmd.main_model import get_args, create_model
-        args = get_args(hidden_channels, num_layers, num_rbf, num_heads=8, cutoff=cutoff, rep_model='et')
+    if model_type == "et":
+        from geom2vec.representation_models.torchmd.main_model import (
+            get_args,
+            create_model,
+        )
+
+        args = get_args(
+            hidden_channels,
+            num_layers,
+            num_rbf,
+            num_heads=8,
+            cutoff=cutoff,
+            rep_model="et",
+        )
         model = create_model(args)
-    elif model_type == 'vis':
+    elif model_type == "vis":
         from geom2vec.representation_models.visnet import ViSNet
-        model = ViSNet(hidden_channels=hidden_channels, cutoff=cutoff, num_rbf=num_rbf, vecnorm_type='max_min',
-                       trainable_vecnorm=True)
-    elif model_type == 'tn':
-        from geom2vec.representation_models.torchmd.main_model import get_args, create_model
-        args = get_args(hidden_channels, num_layers, num_rbf, num_heads=8, cutoff=cutoff, rep_model='tensornet')
+
+        model = ViSNet(
+            hidden_channels=hidden_channels,
+            cutoff=cutoff,
+            num_rbf=num_rbf,
+            vecnorm_type="max_min",
+            trainable_vecnorm=True,
+        )
+    elif model_type == "tn":
+        from geom2vec.representation_models.torchmd.main_model import (
+            get_args,
+            create_model,
+        )
+
+        args = get_args(
+            hidden_channels,
+            num_layers,
+            num_rbf,
+            num_heads=8,
+            cutoff=cutoff,
+            rep_model="tensornet",
+        )
         model = create_model(args)
 
     checkpoint = torch.load(checkpoint_path, map_location=device)
@@ -43,20 +82,20 @@ def create_model(model_type,
 
 
 def infer_traj(
-        model: torch.nn.Module,
-        hidden_channels: int,
-        data: List[np.ndarray],
-        atomic_numbers: np.ndarray,
-        device: torch.device,
-        saving_path: str,
-        batch_size: int = 32,
-        cg_mapping: np.ndarray = None,
-        atom_mask: np.ndarray = None,
-        cg_mask: np.ndarray = None,
-        torch_or_numpy: str = 'torch',
-        file_name_list: List[str] = None
+    model: torch.nn.Module,
+    hidden_channels: int,
+    data: List[np.ndarray],
+    atomic_numbers: np.ndarray,
+    device: torch.device,
+    saving_path: str,
+    batch_size: int = 32,
+    cg_mapping: np.ndarray = None,
+    atom_mask: np.ndarray = None,
+    cg_mask: np.ndarray = None,
+    torch_or_numpy: str = "torch",
+    file_name_list: List[str] = None,
 ):
-    r"""
+    """
     This function is used to infer the trajectories of data.
 
     Input:
@@ -92,7 +131,9 @@ def infer_traj(
         assert sum(cg_mapping) == num_atoms
         # The sum of the coarse-grained mapping should be equal to the number of atoms
         cg_mapping = torch.from_numpy(cg_mapping).to(device)
-        cg_map = torch.repeat_interleave(torch.arange(cg_mapping.shape[0], device=device), cg_mapping, dim=0)
+        cg_map = torch.repeat_interleave(
+            torch.arange(cg_mapping.shape[0], device=device), cg_mapping, dim=0
+        )
 
     z = torch.from_numpy(atomic_numbers).to(device)
     with torch.no_grad():
@@ -107,8 +148,11 @@ def infer_traj(
                 batch_batch = (
                     torch.arange(n_samples).unsqueeze(1).expand(-1, n_atoms).reshape(-1)
                 ).to(device)
-                x_rep, v_rep, _ = model(z=z_batch, pos=pos_batch.reshape(-1, 3).contiguous().to(device),
-                                        batch=batch_batch)
+                x_rep, v_rep, _ = model(
+                    z=z_batch,
+                    pos=pos_batch.reshape(-1, 3).contiguous().to(device),
+                    batch=batch_batch,
+                )
                 # Move the data to CPU and append to the output list
                 x_rep = x_rep.reshape(-1, num_atoms, 1, hidden_channels)
                 v_rep = v_rep.reshape(-1, num_atoms, 3, hidden_channels)
@@ -118,9 +162,13 @@ def infer_traj(
                     atom_rep = atom_rep[:, atom_mask:, :]
 
                 if cg_mapping is not None:
-                    cg_rep = scatter(atom_rep, cg_map, dim=1, reduce='add')
+                    cg_rep = scatter(atom_rep, cg_map, dim=1, reduce="add")
                     if cg_mask is not None:
-                        cg_rep = cg_rep[:, cg_mask, :, ]
+                        cg_rep = cg_rep[
+                            :,
+                            cg_mask,
+                            :,
+                        ]
 
                     cg_rep.detach().cpu()
                     out_list.append(cg_rep)
@@ -132,19 +180,25 @@ def infer_traj(
 
             # concatenate the output batches
             traj_rep = torch.cat(out_list, dim=0)
-            if torch_or_numpy == 'numpy':
+            if torch_or_numpy == "numpy":
                 traj_rep = traj_rep.numpy()
-                saving_file_name = file_name_list[i] if file_name_list is not None else f"traj_{i}"
+                saving_file_name = (
+                    file_name_list[i] if file_name_list is not None else f"traj_{i}"
+                )
                 saving_filepath = os.path.join(saving_path, f"{saving_file_name}.npz")
                 np.savez(saving_filepath, traj_rep)
                 print(f"Trajectory {i} has been saved to {saving_path} using numpy.")
-            elif torch_or_numpy == 'torch':
-                saving_file_name = file_name_list[i] if file_name_list is not None else f"traj_{i}"
+            elif torch_or_numpy == "torch":
+                saving_file_name = (
+                    file_name_list[i] if file_name_list is not None else f"traj_{i}"
+                )
                 saving_filepath = os.path.join(saving_path, f"{saving_file_name}.pt")
                 torch.save(traj_rep, saving_filepath)
                 print(f"Trajectory {i} has been saved to {saving_path} using torch.")
             else:
-                print("Invalid option for torch_or_numpy. Please choose either 'torch' or 'numpy'.")
+                print(
+                    "Invalid option for torch_or_numpy. Please choose either 'torch' or 'numpy'."
+                )
 
     return None
 
@@ -163,14 +217,16 @@ def count_segments(numbers):
 
     # Count elements in each segment
     segment_counts = [Counter(segment) for segment in segments]
-    segment_counts_array = np.array([list(segment_count.values()) for segment_count in segment_counts])
+    segment_counts_array = np.array(
+        [list(segment_count.values()) for segment_count in segment_counts]
+    )
     segment_counts_array = np.concatenate(segment_counts_array, axis=0)
     return segment_counts_array
 
 
 def extract_mda_info(protein, stride=1, selection=None):
     # input: MDA Universe object with selection, output: positions, atomic_numbers, segment_counts
-    protein_residues = protein.select_atoms('prop mass > 1.5 ')  # remove hydrogens
+    protein_residues = protein.select_atoms("prop mass > 1.5 ")  # remove hydrogens
     if selection is not None:
         protein_residues = protein.select_atoms(selection)
     # Get all residues in the protein selection
@@ -178,7 +234,10 @@ def extract_mda_info(protein, stride=1, selection=None):
     atomic_masses = protein_residues.masses
     atomic_masses = np.round(atomic_masses, 3)
 
-    atomic_types = [list(mass_mapping.keys())[list(mass_mapping.values()).index(mass)] for mass in atomic_masses]
+    atomic_types = [
+        list(mass_mapping.keys())[list(mass_mapping.values()).index(mass)]
+        for mass in atomic_masses
+    ]
     atomic_numbers = [atomic_mapping[atom] for atom in atomic_types]
 
     positions = []
@@ -192,7 +251,9 @@ def extract_mda_info(protein, stride=1, selection=None):
     return positions, np.array(atomic_numbers), np.array(segment_counts)
 
 
-def extract_mda_info_folder(folder, top_file, stride=1, selection=None, file_postfix='.dcd'):
+def extract_mda_info_folder(
+    folder, top_file, stride=1, selection=None, file_postfix=".dcd"
+):
     r"""
     do the extraction for all the files in the folder
 
@@ -225,9 +286,11 @@ def extract_mda_info_folder(folder, top_file, stride=1, selection=None, file_pos
 
     position_list = []
     for traj in dcd_files:
-        print(f'Processing {traj}')
+        print(f"Processing {traj}")
         u = mda.Universe(top_file, os.path.join(folder, traj))
-        positions, atomic_numbers, segment_counts = extract_mda_info(u, stride=stride, selection=selection)
+        positions, atomic_numbers, segment_counts = extract_mda_info(
+            u, stride=stride, selection=selection
+        )
         position_list.append(positions)
 
     return position_list, atomic_numbers, segment_counts, dcd_files

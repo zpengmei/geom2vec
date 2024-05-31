@@ -8,15 +8,16 @@ class VarComm(torch.nn.Module):
     Variational committor network for estimating the committor function.
     """
 
-    def __init__(self,
-                 lobe,
-                 optimizer='adam',
-                 device='cuda',
-                 learning_rate=5e-4,
-                 epsilon=1e-1,
-                 k=10,
-                 save_model_interval=None,
-                 ):
+    def __init__(
+        self,
+        lobe,
+        optimizer="adam",
+        device="cuda",
+        learning_rate=5e-4,
+        epsilon=1e-1,
+        k=10,
+        save_model_interval=None,
+    ):
         super(VarComm, self).__init__()
 
         self._lobe = lobe
@@ -25,13 +26,13 @@ class VarComm(torch.nn.Module):
         self._epsilon = epsilon
         self._k = k
 
-        assert optimizer in ['adam', 'adamw', 'sgd']
+        assert optimizer in ["adam", "adamw", "sgd"]
 
-        if optimizer == 'adam':
+        if optimizer == "adam":
             self._optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate)
-        elif optimizer == 'adamw':
+        elif optimizer == "adamw":
             self._optimizer = torch.optim.AdamW(self.parameters(), lr=learning_rate)
-        elif optimizer == 'sgd':
+        elif optimizer == "sgd":
             self._optimizer = torch.optim.SGD(self.parameters(), lr=learning_rate)
 
         self._step = 0
@@ -49,7 +50,6 @@ class VarComm(torch.nn.Module):
         return np.array(self._validation_scores)
 
     def _variational_loss(self, x, ina, inb):
-
         r"""
         Variational loss function for the committor network.
         Parameters
@@ -93,15 +93,18 @@ class VarComm(torch.nn.Module):
         """
         self._step = 0
 
-        for epoch in progress(range(n_epochs), desc='epoch', total=n_epochs, leave=False):
-
+        for epoch in progress(
+            range(n_epochs), desc="epoch", total=n_epochs, leave=False
+        ):
             optimizer = self._optimizer
             model = self._lobe
             k = self._k
 
             model.train()
 
-            for data, ina, inb in progress(train_loader, desc='batch', total=len(train_loader), leave=False):
+            for data, ina, inb in progress(
+                train_loader, desc="batch", total=len(train_loader), leave=False
+            ):
                 optimizer.zero_grad()
                 data = data.to(self._device)
                 ina = ina.to(self._device)
@@ -120,7 +123,12 @@ class VarComm(torch.nn.Module):
                     model.eval()
 
                     losses = []
-                    for data, ina, inb in progress(val_loader, desc='validation', total=len(val_loader), leave=False):
+                    for data, ina, inb in progress(
+                        val_loader,
+                        desc="validation",
+                        total=len(val_loader),
+                        leave=False,
+                    ):
                         data = data.to(self._device)
                         ina = ina.to(self._device)
                         inb = inb.to(self._device)
@@ -133,12 +141,13 @@ class VarComm(torch.nn.Module):
                 if self._save_model_interval is not None:
                     if (epoch + 1) % self._save_model_interval == 0:
                         # save the model with the epoch and the mean score
-                        self._save_models.append((epoch, mean_score, model.state_dict()))
+                        self._save_models.append(
+                            (epoch, mean_score, model.state_dict())
+                        )
 
         return self
 
     def transform(self, dataset, batch_size):
-
         model = self._lobe
         model.eval()
         device = self._device
@@ -154,5 +163,5 @@ class VarComm(torch.nn.Module):
 
         comm = torch.cat(out_list, dim=0)
         comm = comm.numpy()
-        comm = np.clip(1.1 * comm, 0, 1)
+        comm = np.clip((1 + self._epsilon) * comm, 0, 1)
         return comm

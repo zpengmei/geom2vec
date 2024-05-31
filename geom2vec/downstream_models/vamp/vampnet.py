@@ -6,9 +6,7 @@ from .dataprocessing import Postprocessing_vamp
 
 
 class VAMPNet_Estimator:
-
     def __init__(self, epsilon, mode, symmetrized):
-
         self._score = None
         self._score_list = []
 
@@ -20,30 +18,33 @@ class VAMPNet_Estimator:
     @property
     def loss(self):
         if not self._is_fitted:
-            raise ValueError('please fit the model first')
+            raise ValueError("please fit the model first")
         else:
             return -self._score
 
     @property
     def score(self):
         if not self._is_fitted:
-            raise ValueError('please fit the model first')
+            raise ValueError("please fit the model first")
         else:
             return self._score
 
     def fit(self, data):
-
         assert len(data) == 2
 
-        koopman = estimate_koopman_matrix(data[0], data[1], epsilon=self._epsilon, mode=self._mode,
-                                          symmetrized=self._symmetrized)
-        self._score = torch.pow(torch.norm(koopman, p='fro'), 2) + 1
+        koopman = estimate_koopman_matrix(
+            data[0],
+            data[1],
+            epsilon=self._epsilon,
+            mode=self._mode,
+            symmetrized=self._symmetrized,
+        )
+        self._score = torch.pow(torch.norm(koopman, p="fro"), 2) + 1
         self._is_fitted = True
 
         return self
 
     def save(self):
-
         with torch.no_grad():
             # self._score_list.append(self.score.cpu().numpy())
             self._score_list.append(self.score)
@@ -51,13 +52,11 @@ class VAMPNet_Estimator:
         return self
 
     def clear(self):
-
         self._score_list = []
 
         return self
 
     def output_mean_score(self):
-
         # mean_score = np.mean(np.stack(self._score_list), axis=0)
         mean_score = torch.mean(torch.stack(self._score_list))
 
@@ -65,7 +64,7 @@ class VAMPNet_Estimator:
 
 
 class VAMPNet_Model:
-    """ The VAMPNet model from VAMPNet estimator.
+    """The VAMPNet model from VAMPNet estimator.
 
     Parameters
     ----------
@@ -80,7 +79,6 @@ class VAMPNet_Model:
     """
 
     def __init__(self, lobe, lobe_lagged=None, device=None, dtype=np.float32):
-
         self._lobe = lobe
         if dtype == np.float32:
             self._lobe = self._lobe.float()
@@ -103,11 +101,15 @@ class VAMPNet_Model:
     @property
     def lobe_lagged(self):
         if self._lobe_lagged is None:
-            raise ValueError('There is only one neural network for both time-instant and time-lagged data')
+            raise ValueError(
+                "There is only one neural network for both time-instant and time-lagged data"
+            )
         return self._lobe_lagged
 
-    def transform(self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200):
-        """ Transform the data through the trained networks.
+    def transform(
+        self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
+    ):
+        """Transform the data through the trained networks.
 
         Parameters
         ----------
@@ -116,7 +118,7 @@ class VAMPNet_Model:
         instantaneous : boolean, default = True
             Whether to use the instantaneous lobe or the time-lagged lobe for transformation.
             Note that only VAMPNet method requires two lobes
-            
+
         Returns
         -------
         output : array_like
@@ -131,13 +133,15 @@ class VAMPNet_Model:
             net = self._lobe_lagged
 
         output = []
-        for data_tensor in map_data_to_tensor(data, device=self._device, dtype=self._dtype):
+        for data_tensor in map_data_to_tensor(
+            data, device=self._device, dtype=self._dtype
+        ):
             # revise to batching for large data
             # batching first
             batch_list = []
             batch_size = batch_size
             for i in tqdm(range(0, data_tensor.shape[0], batch_size)):
-                data = data_tensor[i:i + batch_size]
+                data = data_tensor[i : i + batch_size]
                 data = data.to(device=self._device)
                 batch_list.append(net(data).detach().cpu().numpy())
             output.append(np.concatenate(batch_list, axis=0))
@@ -148,7 +152,7 @@ class VAMPNet_Model:
             return output if len(output) > 1 else output[0]
         else:
             if lag_time is None:
-                raise ValueError('Please input the lag time for transformation to CVs')
+                raise ValueError("Please input the lag time for transformation to CVs")
             else:
                 post = Postprocessing_vamp(lag_time=lag_time, dtype=self._dtype)
                 output_cv = post.fit_transform(output, instantanuous=instantaneous)
@@ -156,7 +160,7 @@ class VAMPNet_Model:
 
 
 class VAMPNet:
-    """ The method used to train the VAMPnets.
+    """The method used to train the VAMPnets.
 
     Parameters
     ----------
@@ -182,9 +186,19 @@ class VAMPNet:
         The data type of the input data and the parameters of the model.
     """
 
-    def __init__(self, lobe, lobe_lagged=None, optimizer='Adam', device=None, learning_rate=5e-4,
-                 epsilon=1e-6, mode='regularize', symmetrized=False, dtype=np.float32, save_model_interval=None):
-
+    def __init__(
+        self,
+        lobe,
+        lobe_lagged=None,
+        optimizer="Adam",
+        device=None,
+        learning_rate=5e-4,
+        epsilon=1e-6,
+        mode="regularize",
+        symmetrized=False,
+        dtype=np.float32,
+        save_model_interval=None,
+    ):
         self._lobe = lobe
         self._lobe_lagged = lobe_lagged
         self._device = device
@@ -206,20 +220,33 @@ class VAMPNet:
 
         self._step = 0
         self._save_models = []
-        self.optimizer_types = {'Adam': torch.optim.Adam, 'SGD': torch.optim.SGD, 'RMSprop': torch.optim.RMSprop}
+        self.optimizer_types = {
+            "Adam": torch.optim.Adam,
+            "SGD": torch.optim.SGD,
+            "RMSprop": torch.optim.RMSprop,
+        }
         if optimizer not in self.optimizer_types.keys():
-            raise ValueError(f"Unknown optimizer type, supported types are {self.optimizer_types.keys()}")
+            raise ValueError(
+                f"Unknown optimizer type, supported types are {self.optimizer_types.keys()}"
+            )
         else:
             if self._lobe_lagged is None:
-                self._optimizer = self.optimizer_types[optimizer](self._lobe.parameters(), lr=learning_rate)
+                self._optimizer = self.optimizer_types[optimizer](
+                    self._lobe.parameters(), lr=learning_rate
+                )
             else:
                 self._optimizer = self.optimizer_types[optimizer](
-                    list(self._lobe.parameters()) + list(self._lobe_lagged.parameters()), lr=learning_rate)
+                    list(self._lobe.parameters())
+                    + list(self._lobe_lagged.parameters()),
+                    lr=learning_rate,
+                )
 
         self._training_scores = []
         self._validation_scores = []
 
-        self._estimator = VAMPNet_Estimator(epsilon=self._epsilon, mode=self._mode, symmetrized=self._symmetrized)
+        self._estimator = VAMPNet_Estimator(
+            epsilon=self._epsilon, mode=self._mode, symmetrized=self._symmetrized
+        )
 
     @property
     def training_scores(self):
@@ -230,7 +257,7 @@ class VAMPNet:
         return np.array(self._validation_scores)
 
     def partial_fit(self, data):
-        """ Performs a partial fit on data. This does not perform any batching.
+        """Performs a partial fit on data. This does not perform any batching.
 
         Parameters
         ----------
@@ -266,12 +293,12 @@ class VAMPNet:
         return self
 
     def validate(self, val_data):
-        """ Evaluates the currently set lobe(s) on validation data and returns the value of the configured score.
+        """Evaluates the currently set lobe(s) on validation data and returns the value of the configured score.
 
         Parameters
         ----------
         val_data : tuple or list of length 2, containing instantaneous and time-lagged validation data.
-        
+
         Returns
         -------
         score : torch.Tensor
@@ -297,7 +324,7 @@ class VAMPNet:
         return score
 
     def fit(self, train_loader, n_epochs=1, validation_loader=None, progress=tqdm):
-        """ Performs fit on data.
+        """Performs fit on data.
 
         Parameters
         ----------
@@ -316,15 +343,23 @@ class VAMPNet:
 
         self._step = 0
 
-        for epoch in progress(range(n_epochs), desc="epoch", total=n_epochs, leave=False):
-
+        for epoch in progress(
+            range(n_epochs), desc="epoch", total=n_epochs, leave=False
+        ):
             for batch_0, batch_1 in tqdm(train_loader):
-                self.partial_fit((batch_0.to(device=self._device), batch_1.to(device=self._device)))
+                self.partial_fit(
+                    (batch_0.to(device=self._device), batch_1.to(device=self._device))
+                )
 
             if validation_loader is not None:
                 with torch.no_grad():
                     for val_batch_0, val_batch_1 in validation_loader:
-                        self.validate((val_batch_0.to(device=self._device), val_batch_1.to(device=self._device)))
+                        self.validate(
+                            (
+                                val_batch_0.to(device=self._device),
+                                val_batch_1.to(device=self._device),
+                            )
+                        )
 
                     mean_score = self._estimator.output_mean_score()
                     self._validation_scores.append(mean_score.item())
@@ -339,8 +374,10 @@ class VAMPNet:
 
         return self
 
-    def transform(self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200):
-        """ Transform the data through the trained networks.
+    def transform(
+        self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
+    ):
+        """Transform the data through the trained networks.
 
         Parameters
         ----------
@@ -357,11 +394,16 @@ class VAMPNet:
         """
 
         model = self.fetch_model()
-        return model.transform(data, instantaneous=instantaneous, return_cv=return_cv, lag_time=lag_time,
-                               batch_size=batch_size)
+        return model.transform(
+            data,
+            instantaneous=instantaneous,
+            return_cv=return_cv,
+            lag_time=lag_time,
+            batch_size=batch_size,
+        )
 
     def fetch_model(self) -> VAMPNet_Model:
-        """ Yields the current model.
+        """Yields the current model.
 
         Returns
         -------
@@ -370,6 +412,7 @@ class VAMPNet:
         """
 
         from copy import deepcopy
+
         lobe = deepcopy(self._lobe)
         lobe_lagged = deepcopy(self._lobe_lagged)
         return VAMPNet_Model(lobe, lobe_lagged, device=self._device, dtype=self._dtype)

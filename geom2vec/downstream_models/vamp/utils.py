@@ -14,26 +14,32 @@ def set_random_seed(seed):
     torch.backends.cudnn.deterministic = True
     random.seed(seed)
     np.random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
 
 
 def empirical_correlation(x, y):
     x_remove_mean = x - x.mean()
     y_remove_mean = y - y.mean()
     corr = np.mean(x_remove_mean * y_remove_mean) / (
-                np.sqrt(np.mean(x_remove_mean * x_remove_mean)) * np.sqrt(np.mean(y_remove_mean * y_remove_mean)))
+        np.sqrt(np.mean(x_remove_mean * x_remove_mean))
+        * np.sqrt(np.mean(y_remove_mean * y_remove_mean))
+    )
     return np.abs(corr)
 
 
 def mean_error_bar(data, confidence=0.95):
     mean = np.mean(data, axis=0)
-    down, up = scipy.stats.t.interval(confidence=confidence, df=len(data) - 1, loc=np.mean(data, axis=0),
-                                      scale=scipy.stats.sem(data, axis=0))
+    down, up = scipy.stats.t.interval(
+        confidence=confidence,
+        df=len(data) - 1,
+        loc=np.mean(data, axis=0),
+        scale=scipy.stats.sem(data, axis=0),
+    )
     return mean, down, up
 
 
 def rao_blackwell_ledoit_wolf(S, n):
-    """ Rao-Blackwellized Ledoit-Wolf shrinkaged estimator of the covariance matrix.
+    """Rao-Blackwellized Ledoit-Wolf shrinkaged estimator of the covariance matrix.
 
     Parameters
     ----------
@@ -60,7 +66,7 @@ def rao_blackwell_ledoit_wolf(S, n):
     beta = ((p + 1) * n - 2) / (n * (n + 2))
 
     trace_S2 = np.sum(S * S)  # np.trace(S.dot(S))
-    U = ((p * trace_S2 / np.trace(S) ** 2) - 1)
+    U = (p * trace_S2 / np.trace(S) ** 2) - 1
     rho = min(alpha + beta / U, 1)
 
     F = (np.trace(S) / p) * np.eye(p)
@@ -69,10 +75,19 @@ def rao_blackwell_ledoit_wolf(S, n):
 
 
 class ContourPlot2D:
-
-    def __init__(self, bw_method='scotts', num_grids=120, cut=3, clip=None,
-                 temperature=310., shade=True, alpha=0.6, vmin=0, vmax=7, n_levels=15):
-
+    def __init__(
+        self,
+        bw_method="scotts",
+        num_grids=120,
+        cut=3,
+        clip=None,
+        temperature=310.0,
+        shade=True,
+        alpha=0.6,
+        vmin=0,
+        vmax=7,
+        n_levels=15,
+    ):
         self._bw_method = bw_method
         self._num_grids = num_grids
         self._cut = cut
@@ -86,15 +101,14 @@ class ContourPlot2D:
         self._n_levels = n_levels
 
     def _kde_support(self, data, bw, num_grids, cut, clip):
-
         support_min = max(data.min() - bw * cut, clip[0])
         support_max = min(data.max() + bw * cut, clip[1])
 
         return np.linspace(support_min, support_max, num_grids)
 
     def _scipy_bivariate_kde(self, data, bw_method, num_grids, cut, clip):
-
         from scipy import stats
+
         kde = stats.gaussian_kde(data.T)
         std = data.std(axis=0, ddof=1)
 
@@ -102,7 +116,7 @@ class ContourPlot2D:
             bw_x = getattr(kde, "%s_factor" % bw_method)() * std[0]
             bw_y = getattr(kde, "%s_factor" % bw_method)() * std[1]
         else:
-            raise ValueError('Please input the string of a valid bandwidth method.')
+            raise ValueError("Please input the string of a valid bandwidth method.")
 
         x_support = self._kde_support(data[:, 0], bw_x, num_grids, cut, clip[0])
         y_support = self._kde_support(data[:, 1], bw_y, num_grids, cut, clip[1])
@@ -113,34 +127,60 @@ class ContourPlot2D:
         return xx, yy, z
 
     def _thermo_transform(self, z, temperature):
-
         from scipy.constants import Avogadro, Boltzmann, calorie_th
-        THERMO_CONSTANT = 10 ** -3 * Boltzmann * Avogadro / calorie_th
 
-        return - THERMO_CONSTANT * temperature * np.log(z)
+        THERMO_CONSTANT = 10**-3 * Boltzmann * Avogadro / calorie_th
 
-    def plot(self, data, ax=None, cbar=True, cbar_kwargs={},
-             xlabel=None, ylabel=None, labelsize=10):
+        return -THERMO_CONSTANT * temperature * np.log(z)
 
+    def plot(
+        self,
+        data,
+        ax=None,
+        cbar=True,
+        cbar_kwargs={},
+        xlabel=None,
+        ylabel=None,
+        labelsize=10,
+    ):
         from matplotlib import pyplot as plt
+
         if ax is None:
             ax = plt.gca()
 
-        X, Y, Z = self._scipy_bivariate_kde(data, self._bw_method, self._num_grids, self._cut, self._clip)
+        X, Y, Z = self._scipy_bivariate_kde(
+            data, self._bw_method, self._num_grids, self._cut, self._clip
+        )
         Z = self._thermo_transform(Z, self._temperature)
 
         if self._vmin is None:
-            self._vmin = -1E-12
+            self._vmin = -1e-12
         if self._vmax is None:
             self._vmax = np.percentile(Z, 50)
 
         if self._shade:
-            cf = ax.contourf(X, Y, Z - Z.min(), levels=np.linspace(self._vmin, self._vmax, self._n_levels),
-                             alpha=self._alpha, zorder=1, vmin=self._vmin, vmax=self._vmax)
+            cf = ax.contourf(
+                X,
+                Y,
+                Z - Z.min(),
+                levels=np.linspace(self._vmin, self._vmax, self._n_levels),
+                alpha=self._alpha,
+                zorder=1,
+                vmin=self._vmin,
+                vmax=self._vmax,
+            )
 
-        cs = ax.contour(X, Y, Z - Z.min(), cmap=plt.get_cmap('bone_r'),
-                        levels=np.linspace(self._vmin, self._vmax, self._n_levels), alpha=1,
-                        zorder=1, vmin=self._vmin, vmax=self._vmax)
+        cs = ax.contour(
+            X,
+            Y,
+            Z - Z.min(),
+            cmap=plt.get_cmap("bone_r"),
+            levels=np.linspace(self._vmin, self._vmax, self._n_levels),
+            alpha=1,
+            zorder=1,
+            vmin=self._vmin,
+            vmax=self._vmax,
+        )
 
         if cbar:
             if self._shade:
@@ -149,7 +189,7 @@ class ContourPlot2D:
                 cbar = plt.colorbar(cs, **cbar_kwargs)
 
             cbar.ax.tick_params(labelsize=labelsize)
-            cbar.set_label('Free energy (kcal/mol)', fontsize=labelsize)
+            cbar.set_label("Free energy (kcal/mol)", fontsize=labelsize)
 
         ax.grid(zorder=0)
 
@@ -161,8 +201,8 @@ class ContourPlot2D:
         return ax
 
 
-def eig_decomposition(matrix, epsilon=1e-6, mode='regularize'):
-    """ This method can be applied to do the eig-decomposition for a rank deficient hermetian matrix,
+def eig_decomposition(matrix, epsilon=1e-6, mode="regularize"):
+    """This method can be applied to do the eig-decomposition for a rank deficient hermetian matrix,
     this method will be further used to estimate koopman matrix.
 
     Parameters
@@ -181,14 +221,14 @@ def eig_decomposition(matrix, epsilon=1e-6, mode='regularize'):
         Eigenvalues and eigenvectors.
     """
     # matrix = matrix.to(torch.float64)
-    if mode == 'regularize':
+    if mode == "regularize":
         identity = torch.eye(matrix.shape[0], dtype=matrix.dtype, device=matrix.device)
         matrix = matrix + epsilon * identity
         eigval, eigvec = torch.linalg.eigh(matrix)
         eigval = torch.abs(eigval)
         eigvec = eigvec.transpose(0, 1)  # row -> column
 
-    elif mode == 'trunc':
+    elif mode == "trunc":
         eigval, eigvec = torch.linalg.eigh(matrix)
         eigvec = eigvec.transpose(0, 1)
         mask = eigval > epsilon
@@ -196,7 +236,7 @@ def eig_decomposition(matrix, epsilon=1e-6, mode='regularize'):
         eigvec = eigvec[mask]
 
     else:
-        raise ValueError('Mode is not included')
+        raise ValueError("Mode is not included")
 
     # eigval = eigval.to(torch.float32)
     # eigvec = eigvec.to(torch.float32)
@@ -204,8 +244,8 @@ def eig_decomposition(matrix, epsilon=1e-6, mode='regularize'):
     return eigval, eigvec
 
 
-def calculate_inverse(matrix, epsilon=1e-6, return_sqrt=False, mode='regularize'):
-    """ This method can be applied to compute the inverse or the square-root of the inverse of the matrix,
+def calculate_inverse(matrix, epsilon=1e-6, return_sqrt=False, mode="regularize"):
+    """This method can be applied to compute the inverse or the square-root of the inverse of the matrix,
     this method will be further used to estimate koopman matrix.
 
     Parameters
@@ -228,9 +268,9 @@ def calculate_inverse(matrix, epsilon=1e-6, return_sqrt=False, mode='regularize'
     eigval, eigvec = eig_decomposition(matrix, epsilon, mode)
 
     if return_sqrt:
-        diag = torch.diag(torch.sqrt(1. / eigval))
+        diag = torch.diag(torch.sqrt(1.0 / eigval))
     else:
-        diag = torch.diag(1. / eigval)
+        diag = torch.diag(1.0 / eigval)
 
     try:
         # inverse = torch.chain_matmul(eigvec.t(), diag, eigvec)
@@ -242,7 +282,7 @@ def calculate_inverse(matrix, epsilon=1e-6, return_sqrt=False, mode='regularize'
 
 
 def compute_covariance_matrix(x: torch.Tensor, y: torch.Tensor, remove_mean=True):
-    """ This method can be applied to compute the covariance matrix from two batches of data.
+    """This method can be applied to compute the covariance matrix from two batches of data.
 
     Parameters
     ----------
@@ -276,9 +316,14 @@ def compute_covariance_matrix(x: torch.Tensor, y: torch.Tensor, remove_mean=True
     return cov_00, cov_01, cov_11
 
 
-def estimate_koopman_matrix(data: torch.Tensor, data_lagged: torch.Tensor, epsilon=1e-6, mode='regularize',
-                            symmetrized=False):
-    """ This method can be applied to compute the koopman matrix from time-instant and time-lagged data.
+def estimate_koopman_matrix(
+    data: torch.Tensor,
+    data_lagged: torch.Tensor,
+    epsilon=1e-6,
+    mode="regularize",
+    symmetrized=False,
+):
+    """This method can be applied to compute the koopman matrix from time-instant and time-lagged data.
 
     Parameters
     ----------
@@ -303,28 +348,44 @@ def estimate_koopman_matrix(data: torch.Tensor, data_lagged: torch.Tensor, epsil
     cov_00, cov_01, cov_11 = compute_covariance_matrix(data, data_lagged)
 
     if not symmetrized:
-        cov_00_sqrt_inverse = calculate_inverse(cov_00, epsilon=epsilon, return_sqrt=True, mode=mode)
-        cov_11_sqrt_inverse = calculate_inverse(cov_11, epsilon=epsilon, return_sqrt=True, mode=mode)
+        cov_00_sqrt_inverse = calculate_inverse(
+            cov_00, epsilon=epsilon, return_sqrt=True, mode=mode
+        )
+        cov_11_sqrt_inverse = calculate_inverse(
+            cov_11, epsilon=epsilon, return_sqrt=True, mode=mode
+        )
         try:
-            koopman_matrix = torch.linalg.multi_dot((cov_00_sqrt_inverse, cov_01, cov_11_sqrt_inverse)).t()
+            koopman_matrix = torch.linalg.multi_dot(
+                (cov_00_sqrt_inverse, cov_01, cov_11_sqrt_inverse)
+            ).t()
         except:
-            koopman_matrix = torch.chain_matmul(cov_00_sqrt_inverse, cov_01, cov_11_sqrt_inverse).t()
+            koopman_matrix = torch.chain_matmul(
+                cov_00_sqrt_inverse, cov_01, cov_11_sqrt_inverse
+            ).t()
     else:
         cov_0 = 0.5 * (cov_00 + cov_11)
         cov_1 = 0.5 * (cov_01 + cov_01.t())
-        cov_0_sqrt_inverse = calculate_inverse(cov_0, epsilon=epsilon, return_sqrt=True, mode=mode)
+        cov_0_sqrt_inverse = calculate_inverse(
+            cov_0, epsilon=epsilon, return_sqrt=True, mode=mode
+        )
         try:
-            koopman_matrix = torch.linalg.multi_dot((cov_0_sqrt_inverse, cov_1, cov_0_sqrt_inverse)).t()
+            koopman_matrix = torch.linalg.multi_dot(
+                (cov_0_sqrt_inverse, cov_1, cov_0_sqrt_inverse)
+            ).t()
         except:
-            koopman_matrix = torch.chain_matmul((cov_0_sqrt_inverse, cov_1, cov_0_sqrt_inverse)).t()
+            koopman_matrix = torch.chain_matmul(
+                (cov_0_sqrt_inverse, cov_1, cov_0_sqrt_inverse)
+            ).t()
 
     # koopman_matrix = koopman_matrix.to(torch.float32)
 
     return koopman_matrix
 
 
-def estimate_c_tilde_matrix(data: torch.Tensor, data_lagged: torch.Tensor, reversible=True):
-    """ This method can be applied to compute the C\tilde matrix from time-instant and time-lagged data.
+def estimate_c_tilde_matrix(
+    data: torch.Tensor, data_lagged: torch.Tensor, reversible=True
+):
+    """This method can be applied to compute the C\tilde matrix from time-instant and time-lagged data.
 
     Parameters
     ----------
@@ -361,7 +422,7 @@ def estimate_c_tilde_matrix(data: torch.Tensor, data_lagged: torch.Tensor, rever
 
 
 def map_data(data, device=None, dtype=np.float32):
-    """ This function is used to yield the torch.Tensor type data from multiple trajectories.
+    """This function is used to yield the torch.Tensor type data from multiple trajectories.
 
     Parameters
     ----------
@@ -379,19 +440,20 @@ def map_data(data, device=None, dtype=np.float32):
     """
 
     with torch.no_grad():
-
         if not isinstance(data, (list, tuple)):
             data = [data]
         for x in data:
             if isinstance(x, torch.Tensor):
                 x = x.to(device=device)
             else:
-                x = torch.from_numpy(np.asarray(x, dtype=dtype).copy()).to(device=device)
+                x = torch.from_numpy(np.asarray(x, dtype=dtype).copy()).to(
+                    device=device
+                )
             yield x
 
 
 def map_data_to_tensor(data, device=None, dtype=np.float32):
-    """ This function is used to yield the torch.Tensor type data from multiple trajectories without to-device.
+    """This function is used to yield the torch.Tensor type data from multiple trajectories without to-device.
 
     Parameters
     ----------
@@ -409,7 +471,6 @@ def map_data_to_tensor(data, device=None, dtype=np.float32):
     """
 
     with torch.no_grad():
-
         if not isinstance(data, (list, tuple)):
             data = [data]
         for x in data:
