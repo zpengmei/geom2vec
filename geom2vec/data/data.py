@@ -43,8 +43,8 @@ class Preprocessing:
 
         return data
 
-    def create_dataset(self, data, lag_time):
-        """ Create the dataset as the input to VAMPnets.
+    def create_time_lagged_dataset(self, data, lag_time):
+        """ Create a time-lagged dataset.
 
         Parameters
         ----------
@@ -70,6 +70,40 @@ class Preprocessing:
             L_re = L_all - lag_time
             for i in range(L_re):
                 dataset.append((data[k][i, :], data[k][i + lag_time, :]))
+
+        return dataset
+
+    def create_boundary_dataset(self,data, ina, inb):
+        """ Create a dataset for the boundary condition.
+
+        Parameters
+        ----------
+        data : list or ndarray
+            The original trajectories.
+
+        ina : list or ndarray
+            The initial condition.
+
+        inb : list or ndarray
+            The final condition.
+
+        Returns
+        -------
+        dataset : list
+            List of tuples: the length of the list represents the number of data.
+            Each tuple has three elements: one is the instantaneous data frame, the other two are the initial and final conditions.
+        """
+
+        data = self._seq_trajs(data)
+        ina = self._seq_trajs(ina)
+        inb = self._seq_trajs(inb)
+
+        num_trajs = len(data)
+        dataset = []
+        for k in range(num_trajs):
+            L_all = data[k].shape[0]
+            for i in range(L_all):
+                dataset.append((data[k][i, :], ina[k], inb[k]))
 
         return dataset
 
