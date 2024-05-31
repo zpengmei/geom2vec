@@ -34,7 +34,8 @@ Instead, users should directly use the `geom2vec.downstream_models.lobe.lobe` cl
 - `geom2vec.pretrain` contains dataset classes and training scripts for pretraining the GNNs 
 in case users want to train their own models.
 - `geom2vec.representation_models` contains the main classes various GNN architectures 
-that can be used for representation learning. Currently, we support TorchMD-ET, ViSNet, TensorNet.
+that can be used for representation learning. Currently, we support [TorchMD-ET](https://github.com/torchmd/torchmd-net), 
+[ViSNet](https://pytorch-geometric.readthedocs.io/en/latest/generated/torch_geometric.nn.models.ViSNet.html), [TensorNet](https://github.com/torchmd/torchmd-net).
 
 ## Usage
 
@@ -149,9 +150,14 @@ net = lobe(
 )
 ```
 
-## Development
+## Development and Contact
 We are currently are active developing the package. If you have any questions or suggestions, please feel free to
 open an issue or contact us directly.
+
+## Citation
+If you use this package in your research, please cite the following paper:
+```
+```
 
 ## TODO:
 
