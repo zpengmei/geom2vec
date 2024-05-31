@@ -18,15 +18,15 @@ class lobe(torch.nn.Module):
                  mlp_dropout=0.0,
                  mlp_out_activation=Optional[nn.Module],
                  # mixer parameters
-                 token_mixer='None',
-                 num_mixer_layers=4,
-                 expansion_factor=2,
-                 nhead=8,
-                 pooling='cls',
-                 dropout=0.1,
-                 attn_map=False,
-                 num_tokens=1,  # number of tokens for mixer
-                 token_dim=64,  # dimension of tokens for mixer
+                 token_mixer='None',  # None, subformer, submixer
+                 num_mixer_layers=4,  # number of layers for transformer or mlp-mixer
+                 expansion_factor=2,  # expansion factor for transformer FF
+                 nhead=8,  # number of heads for transformer
+                 pooling='cls',  # cls, mean, sum
+                 dropout=0.1,  # dropout for mlp-mixer and transformer
+                 attn_map=False,  # whether to return attention map of transformer
+                 num_tokens=1,  # number of tokens for mlp-mixer
+                 token_dim=64,  # dimension of tokens for mlpixer
                  ):
         super(lobe, self).__init__()
 
@@ -90,6 +90,7 @@ class lobe(torch.nn.Module):
 
         assert data.shape[-2] == 4
 
+        x = None
         if self.token_mixer == 'None':
             x_rep = data[:, 0, :]
             v_rep = data[:, 1:, :]
@@ -129,3 +130,16 @@ class lobe(torch.nn.Module):
             x = self.output_projection(x)
 
         return x
+
+    def fetch_attnmap(self, data):
+        assert self.token_mixer == 'subformer'
+        batch_size, num_nodes, _, _ = data.shape
+        x_rep = data[:, :, 0, :].reshape(batch_size * num_nodes, -1)
+        v_rep = data[:, :, 1:, :].reshape(batch_size * num_nodes, 3, -1)
+        if not self.vector_feature:
+            x = self.input_projection(x_rep)
+        else:
+            x, _ = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
+        x = x.reshape(batch_size, num_nodes, -1)
+        attn_map = self.mixer.get_weights(x)
+        return attn_map
