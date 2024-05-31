@@ -1,5 +1,7 @@
 import torch
 import numpy as np
+import os
+from tqdm import tqdm
 
 
 class Preprocessing:
@@ -92,11 +94,21 @@ class Preprocessing:
 
         assert mmap_mode in ['r', 'r+', 'w+', 'c', None]
 
+        if self._torch_or_numpy == 'torch':
+            files = os.listdir(data_path)
+            files = [os.path.join(data_path,f) for f in files if f.endswith('.pt')]
+            files = sorted(files,key=lambda x: int(x.split('_')[-1].split('.')[0]))
+
+        else:
+            files = os.listdir(data_path)
+            files = [os.path.join(data_path,f) for f in files if f.endswith('.npz')]
+            files = sorted(files,key=lambda x: int(x.split('_')[-1].split('.')[0]))
+
         data = []
-        for file in data_path:
+        for file in tqdm(files):
             if self._torch_or_numpy == 'torch':
-                data.append(torch.load(file, allow_pickle=True, map_location='cpu', mmap=mmap_mode))
+                data.append(torch.load(file, map_location='cpu', mmap=mmap_mode))
             else:
-                data.append(np.load(file, allow_pickle=True, mmap_mode=mmap_mode)['arr_0'])
+                data.append(np.load(file, mmap_mode=mmap_mode)['arr_0'])
 
         return data
