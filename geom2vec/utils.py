@@ -67,7 +67,7 @@ def empirical_correlation(x, y):
     x_remove_mean = x - x.mean()
     y_remove_mean = y - y.mean()
     corr = np.mean(x_remove_mean * y_remove_mean) / (
-                np.sqrt(np.mean(x_remove_mean * x_remove_mean)) * np.sqrt(np.mean(y_remove_mean * y_remove_mean)))
+            np.sqrt(np.mean(x_remove_mean * x_remove_mean)) * np.sqrt(np.mean(y_remove_mean * y_remove_mean)))
     return np.abs(corr)
 
 

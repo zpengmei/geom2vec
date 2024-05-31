@@ -1,8 +1,39 @@
 import torch
 import numpy as np
-from typing import List, Tuple
+from typing import List
 from tqdm import tqdm
 from torch_scatter import scatter
+
+
+def create_model(model_type,
+                 checkpoint_path,
+                 cutoff=7.5,
+                 hidden_channels=128,
+                 num_layers=6,
+                 num_rbf=64,
+                 device='cuda'):
+    assert model_type in ['et', 'vis', 'tn']  # only support ET, ViSNet, and TensorNet
+
+    model = None
+
+    if model_type == 'et':
+        from geom2vec.representation_models.torchmd.main_model import get_args, create_model
+        args = get_args(hidden_channels, num_layers, num_rbf, num_heads=8, cutoff=cutoff, rep_model='et')
+        model = create_model(args)
+    elif model_type == 'vis':
+        from geom2vec.representation_models.visnet import ViSNet
+        model = ViSNet(hidden_channels=hidden_channels, cutoff=cutoff, num_rbf=num_rbf, vecnorm_type='max_min',
+                       trainable_vecnorm=True).to(device)
+    elif model_type == 'tn':
+        from geom2vec.representation_models.torchmd.main_model import get_args, create_model
+        args = get_args(hidden_channels, num_layers, num_rbf, num_heads=8, cutoff=cutoff, rep_model='tensornet')
+        model = create_model(args)
+
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint, strict=False)
+    model.eval()
+
+    return model
 
 
 def infer_traj(
@@ -47,6 +78,7 @@ def infer_traj(
 
     num_atoms = len(atomic_numbers)
 
+    cg_map = None
     if cg_mapping is not None:
         assert sum(cg_mapping) == num_atoms
         # The sum of the coarse-grained mapping should be equal to the number of atoms
@@ -59,6 +91,7 @@ def infer_traj(
             traj = data[i]
 
             out_list = []
+            traj = torch.from_numpy(traj).float().to(device)
             for pos_batch in tqdm(torch.split(traj, batch_size, dim=0)):
                 n_samples, n_atoms, _ = pos_batch.shape
                 z_batch = z.expand(n_samples, -1).reshape(-1).to(device)
@@ -101,4 +134,3 @@ def infer_traj(
             print("Invalid option for torch_or_numpy. Please choose either 'torch' or 'numpy'.")
 
     return None
-

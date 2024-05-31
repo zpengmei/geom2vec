@@ -95,8 +95,8 @@ class Preprocessing:
         data = []
         for file in data_path:
             if self._torch_or_numpy == 'torch':
-                data.append(torch.load(file, allow_pickle=True)['data'], map_location='cpu', mmap=mmap_mode)
+                data.append(torch.load(file, allow_pickle=True, map_location='cpu', mmap=mmap_mode))
             else:
-                data.append(np.load(file, allow_pickle=True)['arr_0'], mmap_mode=mmap_mode)
+                data.append(np.load(file, allow_pickle=True, mmap_mode=mmap_mode)['arr_0'])
 
         return data
