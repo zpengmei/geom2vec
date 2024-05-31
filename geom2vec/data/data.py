@@ -37,9 +37,9 @@ class Preprocessing:
                 data = [data]
             for i in range(len(data)):
                 if not isinstance(data[i], torch.Tensor):
-                    data[i] = torch.tensor(data[i], dtype=self._dtype)
+                    data[i] = torch.tensor(data[i])
                 else:
-                    data[i] = data[i].clone().detach().to(self._dtype)
+                    data[i] = data[i].clone().detach()
 
         return data
 
