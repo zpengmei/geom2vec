@@ -109,7 +109,7 @@ from geom2vec.downstream_models.lobe import Lobe
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Define a simple MLP model without token mixing layers
-mlp = lobe(
+mlp = Lobe(
     hidden_channels=128,
     intermediate_channels=128,
     output_channels=2, 
