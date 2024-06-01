@@ -115,6 +115,9 @@ from geom2vec import Lobe
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Define a simple MLP model without token mixing layers
+# input shape: (batch_size, 4, hidden_channels) 4 refers to the scalar and vector parts of the representation
+# output shape: (batch_size, output_channels)
+
 mlp = Lobe(
     hidden_channels=128,
     intermediate_channels=128,
@@ -127,6 +130,9 @@ mlp = Lobe(
 ).to(device)
 
 # Define a model with token mixing layers (SubFormer, Transformer on CG tokens)
+# input shape: (batch_size, num_tokens, 4, hidden_channels)
+# output shape: (batch_size, output_channels)
+
 subformer = Lobe(
     hidden_channels=128,
     intermediate_channels=128,
@@ -144,6 +150,9 @@ subformer = Lobe(
 )
 
 # Define a model with token mixing layers (SubMixer, MLP-Mixer on CG tokens)
+# input shape: (batch_size, num_tokens, 4, hidden_channels)
+# output shape: (batch_size, output_channels)
+
 submixer = Lobe(
     hidden_channels=128,
     intermediate_channels=128,
