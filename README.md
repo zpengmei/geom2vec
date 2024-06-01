@@ -36,19 +36,25 @@ Under `geom2vec`:
 - `geom2vec.data` contains the data-relevant class and processing utils.
 - `geom2vec.downstream_models` contains models for downstream tasks, e.g., committer function estimation.
 - `geom2vec.layers` contains building blocks (MLPs and Token mixing layers) for the general network architecture.
-Instead, users should directly use the `geom2vec.downstream_models.lobe.lobe` class for best performance and convenience.
+Instead, users should directly use the `geom2vec.downstream_models.lobe.Lobe` class for best performance and convenience.
 - `geom2vec.pretrain` contains dataset classes and training scripts for pretraining the GNNs 
 in case users want to train their own models.
 - `geom2vec.representation_models` contains the main classes various GNN architectures 
 that can be used for representation learning. Currently, we support [TorchMD-ET](https://github.com/torchmd/torchmd-net), 
 [ViSNet](https://pytorch-geometric.readthedocs.io/en/latest/generated/torch_geometric.nn.models.ViSNet.html), [TensorNet](https://github.com/torchmd/torchmd-net).
 
+For convenience, we put common functionalities as follows:
+- `geom2vec.create_model` is a wrapper function to load the pretrained GNN models.
+- `geom2vec.Lobe` is a general class for downstream tasks, which can be used to define the downstream models.
+- `geom2vec.downstream_models.VAMPNet` is a class for dimensionality reduction using VAMPNet.
+- `geom2vec.downstream_models.VarComm` is a class for variational committer function estimation.
+
 ## Usage
 
 1. Define the representation model and load the pretrained weights:
 
 ```python
-from geom2vec.infer import create_model
+from geom2vec import create_model
 
 rep_model = create_model(
     model_type = 'tn',
@@ -65,8 +71,8 @@ rep_model = create_model(
 
 ```python
 import os
-from geom2vec.utils import extract_mda_info_folder
-from geom2vec.infer import infer_traj
+from geom2vec.data import extract_mda_info_folder
+from geom2vec.data import infer_traj
 
 
 topology_file = "your_path_to_top_file"
@@ -96,15 +102,15 @@ infer_traj(
 )
 ```
 
-3. Once finished, users can refer to `geom2vec.downstream_models.vamp.vampnet.VAMPNet` for dimensionality reduction, and
-`geom2vec.downstream_models.committor.vcn.VarComm` for committer function estimation. We provide tutorials for these tasks
-in the `tutorial` folder. From `geom2vec.downstream_models.lobe.Lobe`, users can find the general model architecture
+3. Once finished, users can refer to `geom2vec.downstream_models.VAMPNet` for dimensionality reduction, and
+`geom2vec.downstream_models.VarComm` for committer function estimation. We provide tutorials for these tasks
+in the `tutorial` folder. From `geom2vec.Lobe`, users can find the general model architecture
 for all downstream tasks.
 The `Lobe` class can be defined as follows:
 
 ```python
 import torch
-from geom2vec.downstream_models.lobe import Lobe
+from geom2vec import Lobe
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
