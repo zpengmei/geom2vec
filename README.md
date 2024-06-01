@@ -164,6 +164,7 @@ submixer = Lobe(
     mlp_out_activation=None,
     token_mixer = 'submixer',
     num_mixer_layers = 4,
+    expansion_factor = 2,
     pooling = 'mean',
     dropout = 0.3,
     num_tokens = 10,

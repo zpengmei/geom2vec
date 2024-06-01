@@ -69,7 +69,7 @@ class Lobe(torch.nn.Module):
                 dropout=dropout,
                 dim=intermediate_channels,
                 token_dim=token_dim,
-                channel_dim=intermediate_channels,
+                channel_dim=int(expansion_factor * intermediate_channels),
                 pooling=pooling,
             )
 
