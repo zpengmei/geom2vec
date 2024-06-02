@@ -2,14 +2,26 @@
 
 ![scheme](figs/scheme.jpg)
 
-Geom2Vec (geometry-to-vector) is a framework for compute vector representation of molecular conformations using 
-pretrained graph neural networks (GNNs). The resulting vectors can be used for dimensionality reduction, committor
-function estimation, and in principle any other learnable task in analysis of molecular dynamics (MD) simulations.
-By avoiding the need to retrain the GNNs for each new simulation analysis pipeline,
-the framework allows for efficient exploration of the MD data. Compared to other graph-based methods, Geom2Vec provides
-orders of magnitude advantage in terms of computational efficiency and scalability in both time and memory.
+geom2vec (geometry-to-vector) is a framework for compute vector representation of molecular conformations using
+pretrained graph neural networks (GNNs).
+
+geom2vec offers several attractive features and use cases:
+
+- The vectors representations can be used for dimensionality reduction, committor function estimation, and in principle any other learnable task in analysis of molecular dynamics (MD) simulations.
+- By avoiding the need to retrain the GNNs for each new simulation analysis pipeline, the framework allows for efficient exploration of the MD data.
+- Compared to other graph-based methods, Geom2Vec provides orders of magnitude advantage in terms of computational efficiency and scalability in both time and memory.
+
+## Contents
+
+- [Installation](#installation)
+- [Repository structure](#repository-structure)
+- [Usage](#usage)
+- [Development](#development-and-contact)
+- [Citation](#citation)
+- [To-do](#to-do)
 
 ## Installation
+
 The package is based on PyTorch and PyTorch Geometric. 
 Follow the instructions on 
 the [PyTorch Geometric website](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html)
@@ -177,15 +189,17 @@ We share the same opinion as follows:
 ![meme](figs/meme.jpg)
 
 ## Development and contact
+
 We are currently are active developing the package. If you have any questions or suggestions, please feel free to
 open an issue or contact us directly.
 
 ## Citation
+
 If you use this package in your research, please cite the following paper:
 ```
 ```
 
-## To-do:
+## To-do
 
 - Add [subspace iteration](https://github.com/dinner-group/inexact-subspace-iteration) to the downstream models for 
 committor function estimation and MFPT calculation.

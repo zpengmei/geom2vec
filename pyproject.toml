@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "geom2vec"
 version = "0.1.0"
-description = "Geom2Vec (geometry-to-vector) is a framework for compute vector representation of molecular conformations using pretrained graph neural networksp."
+description = "Geom2Vec (geometry-to-vector) is a framework for compute vector representation of molecular conformations using pretrained graph neural networks."
 authors = [
     "Zihan Pengmei <zpengmei@uchicago.edu",
     "Spencer Guo <scguo@uchicago.edu>",
