@@ -158,7 +158,7 @@ class VarComm(torch.nn.Module):
             loader = torch.utils.data.DataLoader(
                 dataset, batch_size=batch_size, shuffle=False
             )
-            for data,_,_ in tqdm(loader):
+            for data, _, _ in tqdm(loader):
                 data = data.to(device)
                 out = model(data)
                 out_list.append(out.clone().detach().cpu())
