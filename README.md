@@ -174,7 +174,7 @@ submixer = Lobe(
 
 ## Why we mix tokens for large systems?
 We share the same opinion as follows:
-![meme](figs/meme.png)
+![meme](figs/meme.jpg)
 
 ## Development and contact
 We are currently are active developing the package. If you have any questions or suggestions, please feel free to
