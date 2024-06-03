@@ -15,6 +15,7 @@ geom2vec offers several attractive features and use cases:
 
 - [Installation](#installation)
 - [Repository structure](#repository-structure)
+- [Downstream models](#downstream-models)
 - [Usage](#usage)
 - [Development](#development-and-contact)
 - [Citation](#citation)
@@ -61,6 +62,8 @@ For convenience, we put common functionalities as follows:
 - `geom2vec.downstream_models.VAMPNet` is a class for dimensionality reduction using VAMPNet.
 - `geom2vec.downstream_models.StopVAMPNet` is a class for dimensionality reduction using VAMPNet with B.C.
 - `geom2vec.downstream_models.VarComm` is a class for variational committer function estimation.
+
+## Downstream models
 
 ## Usage
 
