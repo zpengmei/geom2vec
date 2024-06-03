@@ -13,8 +13,8 @@ class Preprocessing:
     """
 
     def __init__(
-        self,
-        torch_or_numpy="numpy",
+            self,
+            torch_or_numpy="numpy",
     ):
         self._torch_or_numpy = torch_or_numpy
 
@@ -93,6 +93,8 @@ class Preprocessing:
             Each tuple has three elements: one is the instantaneous data frame, the other two are the boundary conditions
         """
 
+        assert len(data) == len(ina) == len(inb)
+
         data = self._seq_trajs(data)
         ina = self._seq_trajs(ina)
         inb = self._seq_trajs(inb)
@@ -103,6 +105,92 @@ class Preprocessing:
             L_all = data[k].shape[0]
             for i in range(L_all):
                 dataset.append((data[k][i, :], ina[k][i], inb[k][i]))
+
+        return dataset
+
+    def create_time_lagged_stop_dataset(self, data, ina, inb, lag_time):
+        """Create a time-lagged dataset for the boundary condition with stopped time.
+
+        Parameters
+        ----------
+        data : list or ndarray
+            The original trajectories.
+
+        ina : list or ndarray
+            The initial condition.
+
+        inb : list or ndarray
+            The final condition.
+
+        lag_time : int
+            The lag_time used to create the dataset consisting of time-instant and time-lagged data.
+
+        Returns
+        -------
+        dataset : list
+            List of tuples: the length of the list represents the number of data.
+            each tuple has six elements: first two represents the instantaneous data frame
+            and the corresponding time-lagged data frame.
+        """
+        assert len(data) == len(ina) == len(inb)
+
+        if self._torch_or_numpy == "numpy":
+            from .util import forward_stop
+
+            ind = 1 - ina - inb
+            data = self._seq_trajs(data)
+            ind = self._seq_trajs(ind)
+
+            num_trajs = len(data)
+            dataset = []
+
+            for k in range(num_trajs):
+                L_all = data[k].shape[0]
+                L_re = L_all - lag_time
+
+                t0 = np.arange(L_re)
+                t1 = t0 + lag_time
+                ts = np.minimum(t1, forward_stop(ind[k])[t0])
+
+                data_traj = data[k][t0]
+                data_traj_lag = data[k][t1]
+                ind = ind[k][t0, np.newaxis]
+                ind_lag = ind[k][t1, np.newaxis]
+                ind_all = ind[k][ts, np.newaxis]
+
+                assert len(data_traj) == len(data_traj_lag) == len(ind_lag) == len(ind_all)
+
+                for i in range(L_re):
+                    dataset.append((data_traj[i], data_traj_lag[i], ind[i], ind_lag[i], ind_all[i]))
+
+        elif self._torch_or_numpy == "torch":
+            from .util_torch import forward_stop
+
+            ind = 1 - ina - inb
+            data = self._seq_trajs(data)
+            ind = self._seq_trajs(ind)
+
+            num_trajs = len(data)
+            dataset = []
+
+            for k in range(num_trajs):
+                L_all = data[k].shape[0]
+                L_re = L_all - lag_time
+
+                t0 = torch.arange(L_re)
+                t1 = t0 + lag_time
+                ts = torch.minimum(t1, forward_stop(ind[k])[t0])
+
+                data_traj = data[k][t0]
+                data_traj_lag = data[k][t1]
+                ind = ind[k][t0, None]
+                ind_lag = ind[k][t1, None]
+                ind_all = ind[k][ts, None]
+
+                assert len(data_traj) == len(data_traj_lag) == len(ind_lag) == len(ind_all)
+
+                for i in range(L_re):
+                    dataset.append((data_traj[i], data_traj_lag[i], ind[i], ind_lag[i], ind_all[i]))
 
         return dataset
 
