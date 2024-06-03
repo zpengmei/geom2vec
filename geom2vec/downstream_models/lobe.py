@@ -3,30 +3,36 @@ import torch.nn as nn
 from geom2vec.layers.mlps import EquivariantScalar, MLP
 from geom2vec.layers.mixers import SubFormer, SubMixer
 from typing import Optional
+from torch import Tensor
 
 
 class Lobe(torch.nn.Module):
     def __init__(
-        self,
-        # general parameters
-        hidden_channels: int,
-        intermediate_channels: int,
-        output_channels: int,
-        num_layers: int,
-        batch_norm: bool = False,
-        vector_feature: bool = True,
-        mlp_dropout: float = 0.0,
-        mlp_out_activation=Optional[nn.Module],
-        # mixer parameters
-        token_mixer: str = "none",  # None, subformer, submixer
-        num_mixer_layers: int = 4,  # number of layers for transformer or mlp-mixer
-        expansion_factor: int = 2,  # expansion factor for transformer FF
-        nhead: int = 8,  # number of heads for transformer
-        pooling: str = "cls",  # cls, mean, sum
-        dropout: float = 0.1,  # dropout for mlp-mixer and transformer
-        attn_map: bool = False,  # whether to return attention map of transformer
-        num_tokens: int = 1,  # number of tokens for mlp-mixer
-        token_dim: int = 64,  # dimension of tokens for mlpixer
+            self,
+            # general parameters
+            hidden_channels: int,
+            intermediate_channels: int,
+            output_channels: int,
+            num_layers: int,
+            batch_norm: bool = False,
+            vector_feature: bool = True,
+            mlp_dropout: float = 0.0,
+            mlp_out_activation=Optional[nn.Module],
+            # mixer parameters
+            token_mixer: str = "none",  # None, subformer, submixer
+            num_mixer_layers: int = 4,  # number of layers for transformer or mlp-mixer
+            expansion_factor: int = 2,  # expansion factor for transformer FF
+            nhead: int = 8,  # number of heads for transformer
+            pooling: str = "cls",  # cls, mean, sum
+            dropout: float = 0.1,  # dropout for mlp-mixer and transformer
+            attn_map: bool = False,  # whether to return attention map of transformer
+            # suppose user input is (seq_len) true/false mask, True means masked and not to be pooled
+            num_tokens: int = 1,  # number of tokens for mlp-mixer
+            token_dim: int = 64,  # dimension of tokens for mlpixer
+            #### make sure you know what you are doing when using masks ####
+            attn_mask: Tensor = None,  # attention mask for transformer (optional)
+            pool_mask: Tensor = None,  # pool mask for transformer/MLP-mixer (optional)
+            #################################################################
     ):
         super(Lobe, self).__init__()
 
@@ -52,6 +58,7 @@ class Lobe(torch.nn.Module):
 
         if token_mixer == "none":
             self.mixer = None
+
         elif token_mixer == "subformer":
             self.mixer = SubFormer(
                 hidden_channels=intermediate_channels,
@@ -61,6 +68,8 @@ class Lobe(torch.nn.Module):
                 pool=pooling,
                 dropout=dropout,
                 attn_map=attn_map,
+                attn_mask=attn_mask,
+                pool_mask=pool_mask,
             )
         elif token_mixer == "submixer":
             self.mixer = SubMixer(
@@ -71,6 +80,7 @@ class Lobe(torch.nn.Module):
                 token_dim=token_dim,
                 channel_dim=int(expansion_factor * intermediate_channels),
                 pooling=pooling,
+                pool_mask=pool_mask,
             )
 
         self.output_projection = MLP(
@@ -82,6 +92,7 @@ class Lobe(torch.nn.Module):
         )
 
         self.batch_norm = batch_norm
+
         if batch_norm:
             self.batchnorm = nn.BatchNorm1d(intermediate_channels)
 

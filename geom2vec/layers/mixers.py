@@ -58,14 +58,16 @@ class SubFormer(nn.Module):
     """
 
     def __init__(
-        self,
-        hidden_channels,
-        encoder_layers,
-        nhead,
-        dim_feedforward,
-        pool="cls",
-        dropout=0.1,
-        attn_map=True,
+            self,
+            hidden_channels,
+            encoder_layers,
+            nhead,
+            dim_feedforward,
+            pool="cls",
+            dropout=0.1,
+            attn_map=True,
+            attn_mask=None,
+            pool_mask=None,
     ):
         super(SubFormer, self).__init__()
 
@@ -97,37 +99,80 @@ class SubFormer(nn.Module):
             )
 
         self.pool = pool
-        if self.pool == "cls":
-            self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_channels))
-        else:
-            self.cls_token = None
+        self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_channels))
+
+        if attn_mask is not None:
+            # https://pytorch.org/docs/stable/generated/torch.nn.Transformer.html#torch.nn.Transformer
+            # suppose user input is (seq_len) true/false mask or additive mask
+            if attn_mask.dtype == torch.bool:
+                # create the square attention mask, True means masked and not allowed to attend
+                # seq_len -> (seq_len, seq_len)
+                if self.pooling == "cls":
+                    # add a False to the first element of the mask, so that the cls token can attend to all nodes
+                    attn_mask = torch.cat([torch.tensor([False]), attn_mask], dim=0)
+
+                attn_mask = attn_mask.unsqueeze(0) | attn_mask.unsqueeze(1)
+                attn_mask = attn_mask.float().masked_fill(attn_mask == 0, float(0.0)).masked_fill(attn_mask == 1,
+                                                                                                  float('-inf'))
+
+            elif torch.is_floating_point(attn_mask):
+                # additive weight to the attention score, can bias the attention score
+                if self.pooling == "cls":
+                    # add a 0 to the first element of the mask, so that the cls token is not affected by the mask
+                    attn_mask = torch.cat([torch.tensor([0.0]), attn_mask], dim=0)
+
+                attn_mask = attn_mask.unsqueeze(0) + attn_mask.unsqueeze(1)
+
+            else:
+                raise ValueError("attn_mask must be a boolean tensor or a float tensor")
+
+        self.attn_mask = attn_mask
+
+        if pool_mask is not None:
+            # add a False to the first element of the mask for the cls token
+            self.pool_mask = torch.cat([torch.tensor([False]), pool_mask], dim=0)
+            assert self.pool != "cls", "pool_mask is not compatible with cls token pooling"
 
     def get_weights(self, data):
         src = data
-        if self.cls_token is not None:
-            src = torch.cat((self.cls_token.expand(src.size(0), -1, -1), src), dim=1)
+        src = torch.cat((self.cls_token.expand(src.size(0), -1, -1), src), dim=1)
         src, attention_weights = self.transformer_encoder(
-            src, src_key_padding_mask=None
+            src,
+            src_mask=self.attn_mask,
+            src_key_padding_mask=None
         )
         return attention_weights
 
     def forward(self, data):
         src = data
-        if self.cls_token is not None:
-            src = torch.cat((self.cls_token.expand(src.size(0), -1, -1), src), dim=1)
+        src = torch.cat((self.cls_token.expand(src.size(0), -1, -1), src), dim=1)
+
         if self.attn_map:
-            src, attention_weights = self.transformer_encoder(
-                src, src_key_padding_mask=None
+            src, _ = self.transformer_encoder(
+                src,
+                src_mask=self.attn_mask,
+                src_key_padding_mask=None
             )
         else:
-            src = self.transformer_encoder(src, src_key_padding_mask=None)
+            src = self.transformer_encoder(src,
+                                           src_mask=self.attn_mask,
+                                           src_key_padding_mask=None)
 
-        if self.pool == "cls":
-            out = src[:, 0, :]
-        elif self.pool == "mean":
-            out = src.mean(dim=1)
-        elif self.pool == "sum":
-            out = src.sum(dim=1)
+        if hasattr(self, "pool_mask"):
+            src = src[:, ~self.pool_mask, :]  # remove the masked patches
+
+            if self.pool == "mean":
+                out = src[:, 1:, :].mean(dim=1)
+            elif self.pool == "sum":
+                out = src[:, 1:, :].sum(dim=1)
+
+        else:
+            if self.pool == "cls":
+                out = src[:, 0, :]
+            elif self.pool == "mean":
+                out = src[:, 1:, :].mean(dim=1)
+            elif self.pool == "sum":
+                out = src[:, 1:, :].sum(dim=1)
 
         return out
 
@@ -202,14 +247,15 @@ class SubMixer(nn.Module):
     """
 
     def __init__(
-        self,
-        num_patch,
-        depth,
-        dropout,
-        dim,
-        token_dim,
-        channel_dim,
-        pooling="mean",
+            self,
+            num_patch,
+            depth,
+            dropout,
+            dim,
+            token_dim,
+            channel_dim,
+            pooling="mean",
+            pool_mask=None,
     ):
         super().__init__()
         self.num_patch = num_patch
@@ -226,13 +272,36 @@ class SubMixer(nn.Module):
                 f"Pooling should be either 'mean' or 'sum' but got {pooling}"
             )
 
+        if pool_mask is not None:
+            assert (
+                    pool_mask.shape[0] == num_patch
+            ), f"Input tensor has {pool_mask.shape[0]} patches, but expected {num_patch}"
+
+            # assume pool_mask is a boolean tensor
+            assert (
+                    pool_mask.dtype == torch.bool
+            ), "pool_mask must be a boolean tensor"
+
+            self.pool_mask = pool_mask
+
     def forward(self, x):
         assert (
-            x.shape[1] == self.num_patch
+                x.shape[1] == self.num_patch
         ), f"Input tensor has {x.shape[1]} patches, but expected {self.num_patch}"
         x = self.mixer(x)
-        if self.pooling == "mean":
-            x = x.mean(1)
-        elif self.pooling == "sum":
-            x = x.sum(1)
+
+        if hasattr(self, "pool_mask"):
+            x = x[:, ~self.pool_mask, :]  # remove the masked patches
+
+            if self.pooling == "mean":
+                x = x.mean(1)
+            elif self.pooling == "sum":
+                x = x.sum(1)
+
+        else:
+            if self.pooling == "mean":
+                x = x.mean(1)
+            elif self.pooling == "sum":
+                x = x.sum(1)
+
         return x
