@@ -290,7 +290,7 @@ class Postprocessing_vac(Preprocessing):
             modes1_rm = modes1 - modes1.mean(0)
 
             corr = torch.mean(modes0_rm * modes1_rm, dim=0) / (
-                torch.std(modes0_rm, dim=0) * torch.std(modes1_rm, dim=0)
+                    torch.std(modes0_rm, dim=0) * torch.std(modes1_rm, dim=0)
             )
 
             corr = corr.numpy()
@@ -302,7 +302,7 @@ class Postprocessing_vac(Preprocessing):
             modes1_rm = modes1 - np.mean(modes1, axis=0)
 
             corr = np.mean(modes0_rm * modes1_rm, axis=0) / (
-                np.std(modes0_rm, axis=0) * np.std(modes1_rm, axis=0)
+                    np.std(modes0_rm, axis=0) * np.std(modes1_rm, axis=0)
             )
 
         return corr
@@ -548,4 +548,248 @@ class Postprocessing_vamp(Preprocessing):
 
         return modes
 
-# class Postprocessing
+
+class Postprocessing_stopvamp(Preprocessing):
+    """Transform the outputs from neural networks to slow CVs.
+        Note that this method doesn't force the detailed balance constraint,
+        which can be used to process the simulation data with insufficient sampling.
+
+    Parameters
+    ----------
+    lag_time : int
+        The lag time used for transformation.
+
+    dtype : dtype, default = np.float32
+
+    n_dims : int, default = None
+        The number of slow collective variables to obtain.
+    """
+
+    def __init__(self, lag_time=1, dtype=np.float32, n_dims=None):
+        super().__init__(dtype)
+        self._n_dims = n_dims
+        self._lag_time = lag_time
+        self._dtype = dtype
+
+        self._is_fitted = False
+        self._mean_0 = None
+        self._mean_t = None
+        self._singularvalues = None
+        self._left_singularvectors = None
+        self._right_singularvectors = None
+        self._time_scales = None
+
+    @property
+    def lag_time(self):
+        return self._lag_time
+
+    @lag_time.setter
+    def lag_time(self, value: int):
+        self._lag_time = value
+
+    @property
+    def mean_0(self):
+        if not self._is_fitted:
+            raise ValueError("please fit the model first")
+        return self._mean_0
+
+    @property
+    def mean_t(self):
+        if not self._is_fitted:
+            raise ValueError("please fit the model first")
+        return self._mean_t
+
+    @property
+    def singularvalues(self):
+        if not self._is_fitted:
+            raise ValueError("please fit the model first")
+        return self._singularvalues
+
+    @property
+    def left_singularvectors(self):
+        if not self._is_fitted:
+            raise ValueError("please fit the model first")
+        return self._left_singularvectors
+
+    @property
+    def right_singularvectors(self):
+        if not self._is_fitted:
+            raise ValueError("please fit the model first")
+        return self._right_singularvectors
+
+    @property
+    def time_scales(self):
+        if not self._is_fitted:
+            raise ValueError("please fit the model first")
+        return self._time_scales
+
+    def fit(self, dataset):
+        """Fit the model for transformation.
+
+        Parameters
+        ----------
+        data : list or ndarray
+        """
+
+        self._mean_0, self._mean_t = self._cal_mean(dataset)
+        (
+            self._singularvalues,
+            self._left_singularvectors,
+            self._right_singularvectors,
+        ) = self._cal_singularvals_singularvecs(dataset)
+        self._time_scales = -self._lag_time / np.log(np.abs(self._singularvalues))
+
+        self._is_fitted = True
+
+        return self
+
+    def _inv_sqrt(self, cov_matrix):
+        if isinstance(cov_matrix, torch.Tensor):
+            cov_matrix = cov_matrix.numpy()
+
+        import numpy.linalg
+
+        cov_matrix = 0.5 * (cov_matrix + cov_matrix.T)
+
+        eigvals, eigvecs = numpy.linalg.eigh(cov_matrix)
+        sort_key = np.abs(eigvals)
+        idx = np.argsort(sort_key)[::-1]
+        eigvals = eigvals[idx]
+        eigvecs = eigvecs[:, idx]
+
+        diag = np.diag(1.0 / np.maximum(np.sqrt(np.maximum(eigvals, 1e-12)), 1e-12))
+        inv_sqrt = np.dot(eigvecs, diag)
+
+        return inv_sqrt
+
+    def _cal_mean(self, dataset):
+        # dataset = self.create_time_lagged_stop_dataset(data, ina, inb, self._lag_time)
+        if self._torch_or_numpy == "torch":
+            d0, d1, _ = map(torch.tensor, zip(*dataset))
+            d0 = d0.numpy()
+            d1 = d1.numpy()
+        else:
+            d0, d1 = map(np.array, zip(*dataset))
+
+        return d0.mean(0), d1.mean(0)
+
+    def _cal_cov_matrices(self, dataset):
+        # dataset = self.create_time_lagged_stop_dataset(data, ina, inb, self._lag_time)
+
+        batch_size = len(dataset)
+
+        if self._torch_or_numpy == "torch":
+            d0, d1, ind_stop = map(torch.tensor, zip(*dataset))
+
+            # d0_rm = d0 - d0.mean(0)
+            # d1_rm = d1 - d1.mean(0)
+
+            d0_rm = d0
+            d1_rm = d1
+
+            c00 = 1.0 / batch_size * torch.matmul(d0_rm.T, d0_rm)
+            c11 = 1.0 / batch_size * torch.matmul(d1_rm.T, d1_rm)
+            c01 = 1.0 / batch_size * torch.matmul(d0_rm.T, ind_stop * d1_rm)
+
+            c00 = c00.numpy()
+            c11 = c11.numpy()
+            c01 = c01.numpy()
+
+        else:
+            d0, d1, ind_stop = map(np.array, zip(*dataset))
+
+            d0_rm = d0
+            d1_rm = d1
+
+            c00 = 1.0 / batch_size * np.dot(d0_rm.T, d0_rm)
+            c11 = 1.0 / batch_size * np.dot(d1_rm.T, d1_rm)
+            c01 = 1.0 / batch_size * np.dot(d0_rm.T, ind_stop * d1_rm)
+
+        return c00, c01, c11
+
+    def _cal_singularvals_singularvecs(self, dataset):
+        c00, c01, c11 = self._cal_cov_matrices(dataset)
+
+        c00_inv_sqrt = self._inv_sqrt(c00)
+        c11_inv_sqrt = self._inv_sqrt(c11)
+
+        ks = np.dot(c00_inv_sqrt.T, c01).dot(c11_inv_sqrt)
+
+        import scipy.linalg
+
+        U, s, Vh = scipy.linalg.svd(ks, compute_uv=True, lapack_driver="gesvd")
+
+        left = np.dot(c00_inv_sqrt, U)
+        right = np.dot(c11_inv_sqrt, Vh.T)
+
+        idx = np.argsort(s)[::-1]
+
+        if self._n_dims is not None:
+            assert self._n_dims <= len(idx)
+            idx = idx[: self._n_dims]
+
+        s = s[idx]
+        left = left[:, idx]
+        right = right[:, idx]
+
+        return s, left, right
+
+    def transform(self, data, ina, inb, instantaneous=True):
+        """Transfrom the basis funtions (or outputs of neural networks) to the slow CVs.
+            Note that the model must be fitted first before transformation.
+
+        Parameters
+        ----------
+        data : list or ndarray
+
+        instantaneous : boolean, default = True
+            If true, projected onto left singular functions of Koopman operator.
+            If false, projected onto right singular functions of Koopman operator.
+
+        Returns
+        -------
+        modes : list or ndarray
+            Slow CVs (i.e., slow dynamic modes).
+        """
+
+        modes = []
+
+        if not self._is_fitted:
+            raise ValueError("Please fit the model first")
+
+        dataset = self.create_time_lagged_stop_dataset(data, ina, inb, self._lag_time)
+
+        data, _, _ = map(np.array, zip(*dataset))
+        num_trajs = len(data)
+
+        if instantaneous:
+            for i in range(num_trajs):
+                x_rm = data[i] - self._mean_0
+                modes.append(
+                    np.dot(x_rm, self._left_singularvectors).astype(np.float32)
+                )
+        else:
+            for i in range(num_trajs):
+                x_rm = data[i] - self._mean_t
+                modes.append(
+                    np.dot(x_rm, self._right_singularvectors).astype(np.float32)
+                )
+
+        return modes if num_trajs > 1 else modes[0]
+
+    def fit_transform(self, data, ina, inb, instantaneous=True):
+        """Fit the model and transfrom to the slow CVs.
+
+        Parameters
+        ----------
+        data : list or ndarray
+
+        Returns
+        -------
+        modes : list or ndarray
+            Slow CVs (i.e., dynamic modes).
+        """
+        dataset = self.create_time_lagged_stop_dataset(data, ina, inb, self._lag_time)
+        modes = self.fit(data).transform(dataset, instantaneous=instantaneous)
+
+        return modes
