@@ -18,6 +18,7 @@ class Lobe(torch.nn.Module):
             vector_feature: bool = True,
             mlp_dropout: float = 0.0,
             mlp_out_activation=Optional[nn.Module],
+            device: torch.device=torch.device("cpu"),
             # mixer parameters
             token_mixer: str = "none",  # None, subformer, submixer
             num_mixer_layers: int = 4,  # number of layers for transformer or mlp-mixer
@@ -56,6 +57,9 @@ class Lobe(torch.nn.Module):
                 hidden_channels, intermediate_channels
             )
 
+        attn_mask = attn_mask.to(device) if attn_mask is not None else None
+        pool_mask = pool_mask.to(device) if pool_mask is not None else None
+
         if token_mixer == "none":
             self.mixer = None
 
@@ -79,7 +83,7 @@ class Lobe(torch.nn.Module):
                 dim=intermediate_channels,
                 token_dim=token_dim,
                 channel_dim=int(expansion_factor * intermediate_channels),
-                pooling=pooling,
+                pool=pooling,
                 pool_mask=pool_mask,
             )
 
@@ -95,6 +99,8 @@ class Lobe(torch.nn.Module):
 
         if batch_norm:
             self.batchnorm = nn.BatchNorm1d(intermediate_channels)
+
+        self.to(device)
 
     def forward(self, data):
         # several assumptions:
