@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from tqdm import *
-from .utils import estimate_c_tilde_matrix, map_data
+from .utils import estimate_c_tilde_matrix, map_data_to_tensor
 from .dataprocessing import Postprocessing_vac
 
 
@@ -41,7 +41,7 @@ class SRVNet_Estimator:
 
         c_tilde = estimate_c_tilde_matrix(data[0], data[1])
         self._eigenvalues, _ = torch.linalg.eigh(c_tilde)
-        self._score = torch.sum(self._eigenvalues**2) + 1
+        self._score = torch.sum(self._eigenvalues ** 2) + 1
         self._is_fitted = True
 
         return self
@@ -101,11 +101,14 @@ class SRVNet_Model:
     def lobe(self):
         return self._lobe
 
-    def transform(self, data, return_cv=False, lag_time=None):
+    def transform(self, data, batch_size=200, return_cv=False, lag_time=None):
         """Transform the data through the trained networks.
 
         Parameters
         ----------
+        batch_size: int, default = 200
+            The batch size for transforming the data.
+
         data : list or tuple or ndarray
             The data to be transformed.
 
@@ -126,8 +129,18 @@ class SRVNet_Model:
         net = self._lobe
 
         output = []
-        for data_tensor in map_data(data, device=self._device, dtype=self._dtype):
-            output.append(net(data_tensor).cpu().numpy())
+        for data_tensor in map_data_to_tensor(
+                data, device=self._device, dtype=self._dtype
+        ):
+            # revise to batching for large data
+            # batching first
+            batch_list = []
+            batch_size = batch_size
+            for i in tqdm(range(0, data_tensor.shape[0], batch_size)):
+                data = data_tensor[i: i + batch_size]
+                data = data.to(device=self._device)
+                batch_list.append(net(data).detach().cpu().numpy())
+            output.append(np.concatenate(batch_list, axis=0))
 
         if not return_cv:
             return output if len(output) > 1 else output[0]
@@ -163,14 +176,14 @@ class SRVNet:
     """
 
     def __init__(
-        self,
-        lobe,
-        optimizer="Adam",
-        device=None,
-        learning_rate=5e-4,
-        epsilon=1e-6,
-        dtype=np.float32,
-        save_model_interval=None,
+            self,
+            lobe,
+            optimizer="Adam",
+            device=None,
+            learning_rate=5e-4,
+            epsilon=1e-6,
+            dtype=np.float32,
+            save_model_interval=None,
     ):
         self._lobe = lobe
         self._device = device
@@ -304,7 +317,7 @@ class SRVNet:
         self._step = 0
 
         for epoch in progress(
-            range(n_epochs), desc="epoch", total=n_epochs, leave=False
+                range(n_epochs), desc="epoch", total=n_epochs, leave=False
         ):
             for batch_0, batch_1 in train_loader:
                 self.partial_fit(

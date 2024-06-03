@@ -316,7 +316,7 @@ def compute_covariance_matrix(x: torch.Tensor, y: torch.Tensor, remove_mean=True
     return cov_00, cov_01, cov_11
 
 
-def compute_covariance_matrix_bc(x: torch.Tensor, y: torch.Tensor,
+def compute_covariance_matrix_stop(x: torch.Tensor, y: torch.Tensor,
                                  ind_stop: torch.Tensor):
     """ This method can be applied to compute the covariance matrix from two batches of data.
 
@@ -455,36 +455,6 @@ def estimate_c_tilde_matrix(
 
     return C_tilde
 
-
-def map_data(data, device=None, dtype=np.float32):
-    """This function is used to yield the torch.Tensor type data from multiple trajectories.
-
-    Parameters
-    ----------
-    data : list or tuple or ndarray
-        The trajectories of data.
-    device : torch device, default = None
-        The device on which the torch modules are executed.
-    dtype : dtype, default = np.float32
-        The data type of the input data and the parameters of the model.
-
-    Yields
-    ------
-    x : torch.Tensor
-        The mapped data.
-    """
-
-    with torch.no_grad():
-        if not isinstance(data, (list, tuple)):
-            data = [data]
-        for x in data:
-            if isinstance(x, torch.Tensor):
-                x = x.to(device=device)
-            else:
-                x = torch.from_numpy(np.asarray(x, dtype=dtype).copy()).to(
-                    device=device
-                )
-            yield x
 
 
 def map_data_to_tensor(data, device=None, dtype=np.float32):
