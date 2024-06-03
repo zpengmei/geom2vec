@@ -734,7 +734,7 @@ class Postprocessing_stopvamp(Preprocessing):
 
         return s, left, right
 
-    def transform(self, data, ina, inb, instantaneous=True):
+    def transform(self, dataset, instantaneous=True):
         """Transfrom the basis funtions (or outputs of neural networks) to the slow CVs.
             Note that the model must be fitted first before transformation.
 
@@ -757,8 +757,6 @@ class Postprocessing_stopvamp(Preprocessing):
         if not self._is_fitted:
             raise ValueError("Please fit the model first")
 
-        dataset = self.create_time_lagged_stop_dataset(data, ina, inb, self._lag_time)
-
         data, _, _ = map(np.array, zip(*dataset))
         num_trajs = len(data)
 
@@ -777,7 +775,7 @@ class Postprocessing_stopvamp(Preprocessing):
 
         return modes if num_trajs > 1 else modes[0]
 
-    def fit_transform(self, data, ina, inb, instantaneous=True):
+    def fit_transform(self, dataset, instantaneous=True):
         """Fit the model and transfrom to the slow CVs.
 
         Parameters
@@ -789,7 +787,6 @@ class Postprocessing_stopvamp(Preprocessing):
         modes : list or ndarray
             Slow CVs (i.e., dynamic modes).
         """
-        dataset = self.create_time_lagged_stop_dataset(data, ina, inb, self._lag_time)
-        modes = self.fit(data).transform(dataset, instantaneous=instantaneous)
+        modes = self.fit(dataset).transform(dataset, instantaneous=instantaneous)
 
         return modes
