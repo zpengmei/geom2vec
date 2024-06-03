@@ -92,7 +92,7 @@ class Postprocessing_vac(Preprocessing):
         return self
 
     def _cal_mean(self, data):
-        dataset = self.create_dataset(data, self._lag_time)
+        dataset = self.create_time_lagged_dataset(data, self._lag_time)
 
         if self._torch_or_numpy == "torch":
             d0, d1 = map(torch.tensor, zip(*dataset))
@@ -108,7 +108,7 @@ class Postprocessing_vac(Preprocessing):
 
     def _cal_cov_matrices(self, data):
         num_trajs = 1 if not isinstance(data, list) else len(data)
-        dataset = self.create_dataset(data, self._lag_time)
+        dataset = self.create_time_lagged_dataset(data, self._lag_time)
 
         batch_size = len(dataset)
         if self._torch_or_numpy == "numpy":
@@ -281,7 +281,7 @@ class Postprocessing_vac(Preprocessing):
         if self._torch_or_numpy == "torch":
             modes = modes.numpy()
 
-        dataset = self.create_dataset(modes, self._lag_time)
+        dataset = self.create_time_lagged_dataset(data, self._lag_time)
 
         if self._torch_or_numpy == "torch":
             modes0, modes1 = map(torch.tensor, zip(*dataset))
@@ -422,7 +422,7 @@ class Postprocessing_vamp(Preprocessing):
         return inv_sqrt
 
     def _cal_mean(self, data):
-        dataset = self.create_dataset(data, self._lag_time)
+        dataset = self.create_time_lagged_dataset(data, self._lag_time)
         if self._torch_or_numpy == "torch":
             d0, d1 = map(torch.tensor, zip(*dataset))
             d0 = d0.numpy()
@@ -433,7 +433,7 @@ class Postprocessing_vamp(Preprocessing):
         return d0.mean(0), d1.mean(0)
 
     def _cal_cov_matrices(self, data):
-        dataset = self.create_dataset(data, self._lag_time)
+        dataset = self.create_time_lagged_dataset(data, self._lag_time)
 
         batch_size = len(dataset)
 
