@@ -21,8 +21,8 @@ def empirical_correlation(x, y):
     x_remove_mean = x - x.mean()
     y_remove_mean = y - y.mean()
     corr = np.mean(x_remove_mean * y_remove_mean) / (
-        np.sqrt(np.mean(x_remove_mean * x_remove_mean))
-        * np.sqrt(np.mean(y_remove_mean * y_remove_mean))
+            np.sqrt(np.mean(x_remove_mean * x_remove_mean))
+            * np.sqrt(np.mean(y_remove_mean * y_remove_mean))
     )
     return np.abs(corr)
 
@@ -76,17 +76,17 @@ def rao_blackwell_ledoit_wolf(S, n):
 
 class ContourPlot2D:
     def __init__(
-        self,
-        bw_method="scotts",
-        num_grids=120,
-        cut=3,
-        clip=None,
-        temperature=310.0,
-        shade=True,
-        alpha=0.6,
-        vmin=0,
-        vmax=7,
-        n_levels=15,
+            self,
+            bw_method="scotts",
+            num_grids=120,
+            cut=3,
+            clip=None,
+            temperature=310.0,
+            shade=True,
+            alpha=0.6,
+            vmin=0,
+            vmax=7,
+            n_levels=15,
     ):
         self._bw_method = bw_method
         self._num_grids = num_grids
@@ -129,19 +129,19 @@ class ContourPlot2D:
     def _thermo_transform(self, z, temperature):
         from scipy.constants import Avogadro, Boltzmann, calorie_th
 
-        THERMO_CONSTANT = 10**-3 * Boltzmann * Avogadro / calorie_th
+        THERMO_CONSTANT = 10 ** -3 * Boltzmann * Avogadro / calorie_th
 
         return -THERMO_CONSTANT * temperature * np.log(z)
 
     def plot(
-        self,
-        data,
-        ax=None,
-        cbar=True,
-        cbar_kwargs={},
-        xlabel=None,
-        ylabel=None,
-        labelsize=10,
+            self,
+            data,
+            ax=None,
+            cbar=True,
+            cbar_kwargs={},
+            xlabel=None,
+            ylabel=None,
+            labelsize=10,
     ):
         from matplotlib import pyplot as plt
 
@@ -316,12 +316,45 @@ def compute_covariance_matrix(x: torch.Tensor, y: torch.Tensor, remove_mean=True
     return cov_00, cov_01, cov_11
 
 
+def compute_covariance_matrix_bc(x: torch.Tensor, y: torch.Tensor,
+                                 ind_stop: torch.Tensor):
+    """ This method can be applied to compute the covariance matrix from two batches of data.
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        The first batch of data of shape [batch_size, num_basis].
+    y : torch.Tensor
+        The second batch of data of shape [batch_size, num_basis].
+    ind_stop : torch.Tensor
+
+
+    Returns
+    -------
+    (cov_00, cov_01, cov11) : Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        Instantaneous covariance matrix of x, time-lagged covariance matrix of x and y,
+        and instantaneous covariance matrix of y.
+    """
+
+    batch_size = x.shape[0]
+
+    y_t = y.transpose(0, 1)
+    x_t = x.transpose(0, 1)
+
+    cov_01 = 1 / (batch_size - 1) * torch.matmul(x_t, ind_stop * y)
+    cov_00 = 1 / (batch_size - 1) * torch.matmul(x_t, x)
+    cov_11 = 1 / (batch_size - 1) * torch.matmul(y_t, y)
+
+    return cov_00, cov_01, cov_11
+
+
 def estimate_koopman_matrix(
-    data: torch.Tensor,
-    data_lagged: torch.Tensor,
-    epsilon=1e-6,
-    mode="regularize",
-    symmetrized=False,
+        data: torch.Tensor,
+        data_lagged: torch.Tensor,
+        ind_all: torch.Tensor = None,
+        epsilon=1e-6,
+        mode="regularize",
+        symmetrized=False,
 ):
     """This method can be applied to compute the koopman matrix from time-instant and time-lagged data.
 
@@ -331,6 +364,8 @@ def estimate_koopman_matrix(
         The time-instant data of shape [batch_size, num_basis].
     data_lagged : torch.Tensor
         The time-lagged data of shape [batch_size, num_basis].
+    ind_all : torch.Tensor, default = None,
+        The indicator of the data. (B.C.)
     epsilon : float, default = 1e-6
         The regularization/trunction parameters for eigenvalues.
     mode : str, default = 'regularize'
@@ -383,7 +418,7 @@ def estimate_koopman_matrix(
 
 
 def estimate_c_tilde_matrix(
-    data: torch.Tensor, data_lagged: torch.Tensor, reversible=True
+        data: torch.Tensor, data_lagged: torch.Tensor, reversible=True
 ):
     """This method can be applied to compute the C\tilde matrix from time-instant and time-lagged data.
 

@@ -164,12 +164,12 @@ class Preprocessing:
                 data_traj_lag = data[k][t1]
                 ind_traj_out = ind_traj[t0, np.newaxis]
                 ind_traj_lag = ind_traj[t1, np.newaxis]
-                ind_traj_all = ind_traj[ts, np.newaxis]
+                ind_traj_stop = ind_traj[ts, np.newaxis]
 
-                assert len(data_traj) == len(data_traj_lag) == len(ind_traj_lag) == len(ind_traj_all)
+                assert len(data_traj) == len(data_traj_lag) == len(ind_traj_lag) == len(ind_traj_stop)
 
                 for i in range(L_re):
-                    dataset.append((data_traj[i], data_traj_lag[i], ind_traj_out[i], ind_traj_lag[i], ind_traj_all[i]))
+                    dataset.append((data_traj[i], data_traj_lag[i], ind_traj_stop[i]))
 
         elif self._torch_or_numpy == "torch":
             from .util import forward_stop_torch as forward_stop
@@ -199,12 +199,12 @@ class Preprocessing:
                 data_traj_lag = data[k][t1]
                 ind_traj_out = ind_traj[t0].unsqueeze(1)
                 ind_traj_lag = ind_traj[t1].unsqueeze(1)
-                ind_traj_all = ind_traj[ts].unsqueeze(1)
+                ind_traj_stop = ind_traj[ts].unsqueeze(1)
 
-                assert len(data_traj) == len(data_traj_lag) == len(ind_traj_lag) == len(ind_traj_all)
+                assert len(data_traj) == len(data_traj_lag) == len(ind_traj_lag) == len(ind_traj_stop)
 
                 for i in range(L_re):
-                    dataset.append((data_traj[i], data_traj_lag[i], ind_traj_out[i], ind_traj_lag[i], ind_traj_all[i]))
+                    dataset.append((data_traj[i], data_traj_lag[i], ind_traj_stop[i]))
 
         return dataset
 
