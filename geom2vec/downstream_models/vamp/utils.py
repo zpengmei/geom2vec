@@ -238,9 +238,6 @@ def eig_decomposition(matrix, epsilon=1e-6, mode="regularize"):
     else:
         raise ValueError("Mode is not included")
 
-    # eigval = eigval.to(torch.float32)
-    # eigvec = eigvec.to(torch.float32)
-
     return eigval, eigvec
 
 
@@ -273,7 +270,6 @@ def calculate_inverse(matrix, epsilon=1e-6, return_sqrt=False, mode="regularize"
         diag = torch.diag(1.0 / eigval)
 
     try:
-        # inverse = torch.chain_matmul(eigvec.t(), diag, eigvec)
         inverse = torch.linalg.multi_dot((eigvec.t(), diag, eigvec))
     except:
         inverse = torch.chain_matmul(eigvec.t(), diag, eigvec)
@@ -317,7 +313,7 @@ def compute_covariance_matrix(x: torch.Tensor, y: torch.Tensor, remove_mean=True
 
 
 def compute_covariance_matrix_stop(x: torch.Tensor, y: torch.Tensor,
-                                 ind_stop: torch.Tensor):
+                                   ind_stop: torch.Tensor):
     """ This method can be applied to compute the covariance matrix from two batches of data.
 
     Parameters
@@ -351,7 +347,7 @@ def compute_covariance_matrix_stop(x: torch.Tensor, y: torch.Tensor,
 def estimate_koopman_matrix(
         data: torch.Tensor,
         data_lagged: torch.Tensor,
-        ind_all: torch.Tensor = None,
+        ind_stop: torch.Tensor = None,
         epsilon=1e-6,
         mode="regularize",
         symmetrized=False,
@@ -364,7 +360,7 @@ def estimate_koopman_matrix(
         The time-instant data of shape [batch_size, num_basis].
     data_lagged : torch.Tensor
         The time-lagged data of shape [batch_size, num_basis].
-    ind_all : torch.Tensor, default = None,
+    ind_stop : torch.Tensor, default = None,
         The indicator of the data. (B.C.)
     epsilon : float, default = 1e-6
         The regularization/trunction parameters for eigenvalues.
@@ -377,10 +373,10 @@ def estimate_koopman_matrix(
     koopman_matrix : torch.Tensor
         The koopman matrix of shape [num_basis, num_basis].
     """
-    # data = data.to(torch.float64)
-    # data_lagged = data_lagged.to(torch.float64)
-
-    cov_00, cov_01, cov_11 = compute_covariance_matrix(data, data_lagged)
+    if ind_stop is not None:
+        cov_00, cov_01, cov_11 = compute_covariance_matrix_stop(data, data_lagged, ind_stop)
+    else:
+        cov_00, cov_01, cov_11 = compute_covariance_matrix(data, data_lagged)
 
     if not symmetrized:
         cov_00_sqrt_inverse = calculate_inverse(
@@ -411,8 +407,6 @@ def estimate_koopman_matrix(
             koopman_matrix = torch.chain_matmul(
                 (cov_0_sqrt_inverse, cov_1, cov_0_sqrt_inverse)
             ).t()
-
-    # koopman_matrix = koopman_matrix.to(torch.float32)
 
     return koopman_matrix
 
@@ -448,13 +442,11 @@ def estimate_c_tilde_matrix(
     L_inv = torch.inverse(L)
 
     try:
-        # C_tilde = torch.chain_matmul(L_inv, c_1, L_inv.t())
         C_tilde = torch.linalg.multi_dot((L_inv, c_1, L_inv.t()))
     except:
         C_tilde = torch.chain_matmul(L_inv, c_1, L_inv.t())
 
     return C_tilde
-
 
 
 def map_data_to_tensor(data, device=None, dtype=np.float32):

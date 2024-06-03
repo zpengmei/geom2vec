@@ -547,3 +547,5 @@ class Postprocessing_vamp(Preprocessing):
         modes = self.fit(data).transform(data, instantaneous=instantanuous)
 
         return modes
+
+# class Postprocessing
