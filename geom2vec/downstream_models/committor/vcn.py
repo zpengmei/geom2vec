@@ -76,7 +76,7 @@ class VarComm(torch.nn.Module):
         loss_boundary += torch.mean(k * (x[inb] - (1 + eps)) ** 2)
         return loss_var, loss_boundary
 
-    def fit(self, train_loader, n_epochs=1, val_loader=None, progress=tqdm):
+    def fit(self, train_loader, n_epochs=1, validation_loader=None, progress=tqdm):
         r"""
         Fit the committor network to the training data.
 
@@ -84,7 +84,7 @@ class VarComm(torch.nn.Module):
         ----------
         train_loader
         n_epochs
-        val_loader
+        validation_loader
         progress
 
         Returns
@@ -118,15 +118,15 @@ class VarComm(torch.nn.Module):
 
                 self._training_scores.append(loss_var.item() + loss_boundary.item() / k)
 
-            if val_loader is not None:
+            if validation_loader is not None:
                 with torch.no_grad():
                     model.eval()
 
                     losses = []
                     for data, ina, inb in progress(
-                        val_loader,
+                        validation_loader,
                         desc="validation",
-                        total=len(val_loader),
+                        total=len(validation_loader),
                         leave=False,
                     ):
                         data = data.to(self._device)
