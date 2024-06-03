@@ -106,21 +106,18 @@ class SubFormer(nn.Module):
             # suppose user input is (seq_len) true/false mask or additive mask
             if attn_mask.dtype == torch.bool:
                 # create the square attention mask, True means masked and not allowed to attend
+                # add a False to the first element of the mask, so that the cls token can attend to all nodes
+                attn_mask = torch.cat([torch.tensor([False]), attn_mask], dim=0)
                 # seq_len -> (seq_len, seq_len)
-                if self.pool == "cls":
-                    # add a False to the first element of the mask, so that the cls token can attend to all nodes
-                    attn_mask = torch.cat([torch.tensor([False]), attn_mask], dim=0)
-
                 attn_mask = attn_mask.unsqueeze(0) | attn_mask.unsqueeze(1)
                 attn_mask = attn_mask.float().masked_fill(attn_mask == 0, float(0.0)).masked_fill(attn_mask == 1,
                                                                                                   float('-inf'))
 
             elif torch.is_floating_point(attn_mask):
                 # additive weight to the attention score, can bias the attention score
-                if self.pool == "cls":
-                    # add a 0 to the first element of the mask, so that the cls token is not affected by the mask
-                    attn_mask = torch.cat([torch.tensor([0.0]), attn_mask], dim=0)
 
+                # add a 0 to the first element of the mask, so that the cls token is not affected by the mask
+                attn_mask = torch.cat([torch.tensor([0.0]), attn_mask], dim=0)
                 attn_mask = attn_mask.unsqueeze(0) + attn_mask.unsqueeze(1)
 
             else:
