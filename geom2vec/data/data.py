@@ -172,7 +172,7 @@ class Preprocessing:
                     dataset.append((data_traj[i], data_traj_lag[i], ind_traj_out[i], ind_traj_lag[i], ind_traj_all[i]))
 
         elif self._torch_or_numpy == "torch":
-            from .util_torch import forward_stop
+            from .util import forward_stop_torch as forward_stop
 
             data = self._seq_trajs(data)
             ina = self._seq_trajs(ina)
