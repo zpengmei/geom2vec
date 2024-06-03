@@ -18,7 +18,7 @@ class Lobe(torch.nn.Module):
             vector_feature: bool = True,
             mlp_dropout: float = 0.0,
             mlp_out_activation=Optional[nn.Module],
-            device: torch.device=torch.device("cpu"),
+            device: torch.device = torch.device("cpu"),
             # mixer parameters
             token_mixer: str = "none",  # None, subformer, submixer
             num_mixer_layers: int = 4,  # number of layers for transformer or mlp-mixer
@@ -74,6 +74,7 @@ class Lobe(torch.nn.Module):
                 attn_map=attn_map,
                 attn_mask=attn_mask,
                 pool_mask=pool_mask,
+                device=device,
             )
         elif token_mixer == "submixer":
             self.mixer = SubMixer(
@@ -85,6 +86,7 @@ class Lobe(torch.nn.Module):
                 channel_dim=int(expansion_factor * intermediate_channels),
                 pool=pooling,
                 pool_mask=pool_mask,
+                device=device,
             )
 
         self.output_projection = MLP(

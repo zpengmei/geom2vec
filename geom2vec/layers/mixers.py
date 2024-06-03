@@ -68,6 +68,7 @@ class SubFormer(nn.Module):
             attn_map=True,
             attn_mask=None,
             pool_mask=None,
+            device=torch.device("cpu"),
     ):
         super(SubFormer, self).__init__()
 
@@ -107,7 +108,7 @@ class SubFormer(nn.Module):
             if attn_mask.dtype == torch.bool:
                 # create the square attention mask, True means masked and not allowed to attend
                 # add a False to the first element of the mask, so that the cls token can attend to all nodes
-                attn_mask = torch.cat([torch.tensor([False]), attn_mask], dim=0)
+                attn_mask = torch.cat([torch.tensor([False]).to(device), attn_mask], dim=0)
                 # seq_len -> (seq_len, seq_len)
                 attn_mask = attn_mask.unsqueeze(0) | attn_mask.unsqueeze(1)
                 attn_mask = attn_mask.float().masked_fill(attn_mask == 0, float(0.0)).masked_fill(attn_mask == 1,
@@ -117,7 +118,7 @@ class SubFormer(nn.Module):
                 # additive weight to the attention score, can bias the attention score
 
                 # add a 0 to the first element of the mask, so that the cls token is not affected by the mask
-                attn_mask = torch.cat([torch.tensor([0.0]), attn_mask], dim=0)
+                attn_mask = torch.cat([torch.tensor([0.0]).to(device), attn_mask], dim=0)
                 attn_mask = attn_mask.unsqueeze(0) + attn_mask.unsqueeze(1)
 
             else:
@@ -127,7 +128,7 @@ class SubFormer(nn.Module):
 
         if pool_mask is not None:
             # add a False to the first element of the mask for the cls token
-            self.pool_mask = torch.cat([torch.tensor([False]), pool_mask], dim=0)
+            self.pool_mask = torch.cat([torch.tensor([False]).to(device), pool_mask], dim=0)
             assert self.pool != "cls", "pool_mask is not compatible with cls token pooling"
 
     def get_weights(self, data):
@@ -253,6 +254,7 @@ class SubMixer(nn.Module):
             channel_dim,
             pool="mean",
             pool_mask=None,
+            device=torch.device("cpu"),
     ):
         super().__init__()
         self.num_patch = num_patch
