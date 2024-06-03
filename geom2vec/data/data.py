@@ -166,6 +166,10 @@ class Preprocessing:
         elif self._torch_or_numpy == "torch":
             from .util_torch import forward_stop
 
+            if ina.dtype == torch.bool:
+                ina = ina.long()
+                inb = inb.long()
+
             ind = 1 - ina - inb
             data = self._seq_trajs(data)
             ind = self._seq_trajs(ind)
