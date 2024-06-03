@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from tqdm import *
 from .utils import estimate_koopman_matrix, map_data_to_tensor
-from .dataprocessing import Postprocessing_vamp
+from .dataprocessing import Postprocessing_stopvamp
 
 
 class VAMPNet_Estimator:
@@ -154,7 +154,7 @@ class VAMPNet_Model:
             if lag_time is None:
                 raise ValueError("Please input the lag time for transformation to CVs")
             else:
-                post = Postprocessing_vamp(lag_time=lag_time, dtype=self._dtype)
+                post = Postprocessing_stopvamp(lag_time=lag_time, dtype=self._dtype)
                 output_cv = post.fit_transform(output, instantanuous=instantaneous)
             return output_cv if len(output_cv) > 1 else output_cv[0]
 
