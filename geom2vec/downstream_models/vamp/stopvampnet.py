@@ -126,7 +126,6 @@ class VAMPNet_Model:
         output : array_like
             List of numpy array or numpy array containing transformed data.
         """
-
         if instantaneous or self._lobe_lagged is None:
             self._lobe.eval()
             net = self._lobe
