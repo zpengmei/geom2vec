@@ -139,7 +139,8 @@ mlp = Lobe(
     vector_feature=True, # Whether to use the vector representation or just the scalar part
     mlp_dropout=0.1,
     mlp_out_activation=None,
-).to(device)
+    device=device,
+)
 
 # Define a model with token mixing layers (SubFormer, Transformer on CG tokens)
 # input shape: (batch_size, num_tokens, 4, hidden_channels)
@@ -159,6 +160,7 @@ subformer = Lobe(
     expansion_factor = 2,
     pooling = 'cls',
     dropout = 0.2,
+    device=device,
 )
 
 # Define a model with token mixing layers (SubMixer, MLP-Mixer on CG tokens)
@@ -180,7 +182,8 @@ submixer = Lobe(
     pooling = 'mean',
     dropout = 0.3,
     num_tokens = 10,
-    token_dim = 24
+    token_dim = 24,
+    device=device,
 )
 ```
 
