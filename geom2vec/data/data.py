@@ -137,9 +137,11 @@ class Preprocessing:
         if self._torch_or_numpy == "numpy":
             from .util import forward_stop
 
-            ind = 1 - ina - inb
+            # squeeze the ina and inb
+
             data = self._seq_trajs(data)
-            ind = self._seq_trajs(ind)
+            ina = self._seq_trajs(ina)
+            inb = self._seq_trajs(inb)
 
             num_trajs = len(data)
             dataset = []
@@ -148,31 +150,33 @@ class Preprocessing:
                 L_all = data[k].shape[0]
                 L_re = L_all - lag_time
 
+                ina_traj = ina[k].astype(int)
+                inb_traj = inb[k].astype(int)
+
+                ind_traj = 1 - ina_traj - inb_traj
+                ind_traj = np.squeeze(ind_traj)
+
                 t0 = np.arange(L_re)
                 t1 = t0 + lag_time
-                ts = np.minimum(t1, forward_stop(ind[k])[t0])
+                ts = np.minimum(t1, forward_stop(ind_traj)[t0])
 
                 data_traj = data[k][t0]
                 data_traj_lag = data[k][t1]
-                ind = ind[k][t0, np.newaxis]
-                ind_lag = ind[k][t1, np.newaxis]
-                ind_all = ind[k][ts, np.newaxis]
+                ind_traj_out = ind_traj[t0, np.newaxis]
+                ind_traj_lag = ind_traj[t1, np.newaxis]
+                ind_traj_all = ind_traj[ts, np.newaxis]
 
-                assert len(data_traj) == len(data_traj_lag) == len(ind_lag) == len(ind_all)
+                assert len(data_traj) == len(data_traj_lag) == len(ind_traj_lag) == len(ind_traj_all)
 
                 for i in range(L_re):
-                    dataset.append((data_traj[i], data_traj_lag[i], ind[i], ind_lag[i], ind_all[i]))
+                    dataset.append((data_traj[i], data_traj_lag[i], ind_traj_out[i], ind_traj_lag[i], ind_traj_all[i]))
 
         elif self._torch_or_numpy == "torch":
             from .util_torch import forward_stop
 
-            if ina.dtype == torch.bool:
-                ina = ina.long()
-                inb = inb.long()
-
-            ind = 1 - ina - inb
             data = self._seq_trajs(data)
-            ind = self._seq_trajs(ind)
+            ina = self._seq_trajs(ina)
+            inb = self._seq_trajs(inb)
 
             num_trajs = len(data)
             dataset = []
@@ -181,20 +185,26 @@ class Preprocessing:
                 L_all = data[k].shape[0]
                 L_re = L_all - lag_time
 
+                ina_traj = ina[k].int()
+                inb_traj = inb[k].int()
+
+                ind_traj = 1 - ina_traj - inb_traj
+                ind_traj = ind_traj.squeeze()
+
                 t0 = torch.arange(L_re)
                 t1 = t0 + lag_time
-                ts = torch.minimum(t1, forward_stop(ind[k])[t0])
+                ts = torch.minimum(t1, forward_stop(ind_traj)[t0])
 
                 data_traj = data[k][t0]
                 data_traj_lag = data[k][t1]
-                ind = ind[k][t0, None]
-                ind_lag = ind[k][t1, None]
-                ind_all = ind[k][ts, None]
+                ind_traj_out = ind_traj[t0].unsqueeze(1)
+                ind_traj_lag = ind_traj[t1].unsqueeze(1)
+                ind_traj_all = ind_traj[ts].unsqueeze(1)
 
-                assert len(data_traj) == len(data_traj_lag) == len(ind_lag) == len(ind_all)
+                assert len(data_traj) == len(data_traj_lag) == len(ind_traj_lag) == len(ind_traj_all)
 
                 for i in range(L_re):
-                    dataset.append((data_traj[i], data_traj_lag[i], ind[i], ind_lag[i], ind_all[i]))
+                    dataset.append((data_traj[i], data_traj_lag[i], ind_traj_out[i], ind_traj_lag[i], ind_traj_all[i]))
 
         return dataset
 
