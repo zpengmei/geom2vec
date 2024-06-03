@@ -138,7 +138,7 @@ class SubFormer(nn.Module):
         src = torch.cat((self.cls_token.expand(src.size(0), -1, -1), src), dim=1)
         src, attention_weights = self.transformer_encoder(
             src,
-            src_mask=self.attn_mask,
+            mask=self.attn_mask,
             src_key_padding_mask=None
         )
         return attention_weights
@@ -150,12 +150,12 @@ class SubFormer(nn.Module):
         if self.attn_map:
             src, _ = self.transformer_encoder(
                 src,
-                src_mask=self.attn_mask,
+                mask=self.attn_mask,
                 src_key_padding_mask=None
             )
         else:
             src = self.transformer_encoder(src,
-                                           src_mask=self.attn_mask,
+                                           mask=self.attn_mask,
                                            src_key_padding_mask=None)
 
         if hasattr(self, "pool_mask"):
