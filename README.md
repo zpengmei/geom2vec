@@ -59,6 +59,7 @@ For convenience, we put common functionalities as follows:
 - `geom2vec.create_model` is a wrapper function to load the pretrained GNN models.
 - `geom2vec.Lobe` is a general class for downstream tasks, which can be used to define the downstream models.
 - `geom2vec.downstream_models.VAMPNet` is a class for dimensionality reduction using VAMPNet.
+- `geom2vec.downstream_models.StopVAMPNet` is a class for dimensionality reduction using VAMPNet with B.C.
 - `geom2vec.downstream_models.VarComm` is a class for variational committer function estimation.
 
 ## Usage
@@ -114,7 +115,7 @@ infer_traj(
 )
 ```
 
-3. Once finished, users can refer to `geom2vec.downstream_models.VAMPNet` for dimensionality reduction, and
+3. Once finished, users can refer to `geom2vec.downstream_models.VAMPNet` and `geom2vec.downstream_models.StopVAMPNet` for dimensionality reduction, and
 `geom2vec.downstream_models.VarComm` for committer function estimation. We provide tutorials for these tasks
 in the `tutorial` folder. From `geom2vec.Lobe`, users can find the general model architecture
 for all downstream tasks.
