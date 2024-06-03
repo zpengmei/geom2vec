@@ -107,7 +107,7 @@ class SubFormer(nn.Module):
             if attn_mask.dtype == torch.bool:
                 # create the square attention mask, True means masked and not allowed to attend
                 # seq_len -> (seq_len, seq_len)
-                if self.pooling == "cls":
+                if self.pool == "cls":
                     # add a False to the first element of the mask, so that the cls token can attend to all nodes
                     attn_mask = torch.cat([torch.tensor([False]), attn_mask], dim=0)
 
@@ -117,7 +117,7 @@ class SubFormer(nn.Module):
 
             elif torch.is_floating_point(attn_mask):
                 # additive weight to the attention score, can bias the attention score
-                if self.pooling == "cls":
+                if self.pool == "cls":
                     # add a 0 to the first element of the mask, so that the cls token is not affected by the mask
                     attn_mask = torch.cat([torch.tensor([0.0]), attn_mask], dim=0)
 
@@ -254,7 +254,7 @@ class SubMixer(nn.Module):
             dim,
             token_dim,
             channel_dim,
-            pooling="mean",
+            pool="mean",
             pool_mask=None,
     ):
         super().__init__()
@@ -266,10 +266,10 @@ class SubMixer(nn.Module):
                 for _ in range(depth)
             ]
         )
-        self.pooling = pooling
-        if pooling not in ["mean", "sum"]:
+        self.pool = pool
+        if pool not in ["mean", "sum"]:
             raise ValueError(
-                f"Pooling should be either 'mean' or 'sum' but got {pooling}"
+                f"Pooling should be either 'mean' or 'sum' but got {pool}"
             )
 
         if pool_mask is not None:
@@ -293,15 +293,15 @@ class SubMixer(nn.Module):
         if hasattr(self, "pool_mask"):
             x = x[:, ~self.pool_mask, :]  # remove the masked patches
 
-            if self.pooling == "mean":
+            if self.pool == "mean":
                 x = x.mean(1)
-            elif self.pooling == "sum":
+            elif self.pool == "sum":
                 x = x.sum(1)
 
         else:
-            if self.pooling == "mean":
+            if self.pool == "mean":
                 x = x.mean(1)
-            elif self.pooling == "sum":
+            elif self.pool == "sum":
                 x = x.sum(1)
 
         return x
