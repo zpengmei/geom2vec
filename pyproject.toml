@@ -3,7 +3,7 @@ name = "geom2vec"
 version = "0.1.0"
 description = "Geom2Vec (geometry-to-vector) is a framework for compute vector representation of molecular conformations using pretrained graph neural networks."
 authors = [
-    "Zihan Pengmei <zpengmei@uchicago.edu",
+    "Zihan Pengmei <zpengmei@uchicago.edu>",
     "Spencer Guo <scguo@uchicago.edu>",
     "Chatipat Lorpaiboon <chatipat@uchicago.edu>"
 ]
@@ -25,7 +25,6 @@ rdkit = "^2023.9.6"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-
 
 [project.urls]
 Homepage = "https://github.com/zpengmei/geom2vec"
