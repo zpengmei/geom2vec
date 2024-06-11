@@ -14,6 +14,7 @@ setup(
         'ase',
         'rdkit',
         'matplotlib',
+        'einops'
     ]
 )
 
