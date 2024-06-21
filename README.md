@@ -1,6 +1,6 @@
 # geom2vec
 
-![scheme](figs/scheme.jpg)
+![scheme](resources/scheme.jpg)
 
 geom2vec (geometry-to-vector) is a framework for compute vector representation of molecular conformations using
 pretrained graph neural networks (GNNs).
@@ -42,7 +42,7 @@ The repository is organized as follows:
 
 - `geom2vec` contains the main classes and functions for the framework.
 - `checkpoints` contains the pretrained GNN parameters for different architectures.
-- `tutorial` contains basic tutorials for using the package.
+- `examples` contains basic tutorials for using the package.
 
 Under `geom2vec`:
 
@@ -120,7 +120,7 @@ infer_traj(
 
 3. Once finished, users can refer to `geom2vec.downstream_models.VAMPNet` and `geom2vec.downstream_models.StopVAMPNet` for dimensionality reduction, and
 `geom2vec.downstream_models.VarComm` for committer function estimation. We provide tutorials for these tasks
-in the `tutorial` folder. From `geom2vec.Lobe`, users can find the general model architecture
+in the `examples` folder. From `geom2vec.Lobe`, users can find the general model architecture
 for all downstream tasks.
 The `Lobe` class can be defined as follows:
 
@@ -193,7 +193,7 @@ submixer = Lobe(
 
 ## Why we mix tokens for large systems?
 We share the same opinion as follows:
-![meme](figs/meme.jpg)
+![meme](resources/meme.jpg)
 
 ## Development and contact
 
