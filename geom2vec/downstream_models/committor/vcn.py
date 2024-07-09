@@ -1,22 +1,27 @@
-import torch
+from typing import Optional
+
 import numpy as np
+import torch
+import torch.nn as nn
+from scipy.special import expit
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 
-class VarComm(torch.nn.Module):
+class VarComm(nn.Module):
     r"""
     Variational committor network for estimating the committor function.
     """
 
     def __init__(
         self,
-        lobe,
-        optimizer="adam",
-        device="cuda",
-        learning_rate=5e-4,
-        epsilon=1e-1,
-        k=10,
-        save_model_interval=None,
+        lobe: nn.Module,
+        optimizer: str = "adam",
+        device: str = "cuda",
+        learning_rate: float = 5e-4,
+        epsilon: float = 1e-1,
+        k: float = 10,
+        save_model_interval: Optional[int] = None,
     ):
         super(VarComm, self).__init__()
 
@@ -49,13 +54,13 @@ class VarComm(torch.nn.Module):
     def validation_scores(self):
         return np.array(self._validation_scores)
 
-    def _variational_loss(self, x, ina, inb):
+    def _variational_loss(self, data, ina, inb):
         r"""
         Variational loss function for the committor network.
         Parameters
         ----------
         x: torch.Tensor
-            The network output.
+            The network output, of dimensions (2, n_batch, 1), at time 0 and time 1
         ina: torch.Tensor
             The input data for the first state.
         inb: torch.Tensor
@@ -68,23 +73,32 @@ class VarComm(torch.nn.Module):
 
         k = self._k
         eps = self._epsilon
+        q = nn.sigmoid(x)
 
-        x = x * (1 + eps)
-        q = torch.clip(x, min=0, max=1)
-        loss_var = torch.mean(0.5 * torch.diff(q, dim=0) ** 2)
-        loss_boundary = torch.mean(k * (x[ina] + eps) ** 2)
-        loss_boundary += torch.mean(k * (x[inb] - (1 + eps)) ** 2)
+        q = q * (1 + 2 * eps) - eps
+        q = torch.clip(q, min=0, max=1)
+        q0, q1 = q
+        loss_var = torch.mean(0.5 * (q0 - q1) ** 2)
+        loss_boundary = torch.mean(0.5 * k * (x * ina + eps) ** 2)
+        loss_boundary += torch.mean(0.5 * k * (x * inb - (1 + eps)) ** 2)
         return loss_var, loss_boundary
 
-    def fit(self, train_loader, n_epochs=1, validation_loader=None, progress=tqdm):
+    def fit(
+        self,
+        train_loader: DataLoader,
+        n_epochs: int = 1,
+        validation_loader: Optional[DataLoader] = None,
+        progress=tqdm,
+    ):
         r"""
         Fit the committor network to the training data.
 
         Parameters
         ----------
-        train_loader
-        n_epochs
-        validation_loader
+        train_loader: training data loader. Should yield batches of time-lagged 
+            data with shape (2, n_batch, n_dim), in_A, and in_B
+        n_epochs: number of epochs (passes through the data set)
+        validation_loader: validation data loader
         progress
 
         Returns
@@ -110,13 +124,13 @@ class VarComm(torch.nn.Module):
                 ina = ina.to(self._device)
                 inb = inb.to(self._device)
 
-                q = model(data)
-                loss_var, loss_boundary = self._variational_loss(q, ina, inb)
+                x = model(data)
+                loss_var, loss_boundary = self._variational_loss(x, ina, inb)
                 loss = loss_var + loss_boundary
                 loss.backward()
                 optimizer.step()
 
-                self._training_scores.append(loss_var.item() + loss_boundary.item() / k)
+                self._training_scores.append(loss_var.item() + loss_boundary.item())
 
             if validation_loader is not None:
                 with torch.no_grad():
@@ -134,7 +148,7 @@ class VarComm(torch.nn.Module):
                         inb = inb.to(self._device)
                         q = model(data)
                         loss_var, loss_boundary = self._variational_loss(q, ina, inb)
-                        losses.append(loss_var.item() + loss_boundary.item() / k)
+                        losses.append(loss_var.item() + loss_boundary.item())
                     mean_score = np.mean(losses)
                     self._validation_scores.append(mean_score)
 
@@ -148,6 +162,7 @@ class VarComm(torch.nn.Module):
         return self
 
     def transform(self, dataset, batch_size):
+        eps = self._epsilon
         model = self._lobe
         model.eval()
         device = self._device
@@ -155,15 +170,13 @@ class VarComm(torch.nn.Module):
 
         out_list = []
         with torch.no_grad():
-            loader = torch.utils.data.DataLoader(
-                dataset, batch_size=batch_size, shuffle=False
-            )
+            loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
             for data, _, _ in tqdm(loader):
                 data = data.to(device)
                 out = model(data)
                 out_list.append(out.clone().detach().cpu())
 
-        comm = torch.cat(out_list, dim=0)
-        comm = comm.numpy()
-        comm = np.clip((1 + self._epsilon) * comm, 0, 1)
-        return comm
+        q = torch.cat(out_list, dim=0)
+        q = q.numpy()
+        q = np.clip((1 + 2 * eps) * expit(q) - eps, 0, 1)
+        return q
