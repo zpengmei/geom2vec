@@ -208,7 +208,7 @@ class Preprocessing:
 
         return dataset
 
-    def load_dataset(self, data_path, mmap_mode="r"):
+    def load_dataset(self, data_path, mmap_mode="r", data_key="arr_0", to_torch=True):
         """Load the dataset from the file.
 
         Parameters
@@ -246,8 +246,15 @@ class Preprocessing:
                     torch.load(file, map_location="cpu", mmap=mmap_mode).to(self._dtype)
                 )
             else:
-                data.append(
-                    np.load(file, mmap_mode=mmap_mode)["arr_0"].astype(self._dtype)
-                )
+                if to_torch:
+                    data.append(
+                        torch.tensor(
+                            np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
+                        )
+                    )
+                else:
+                    data.append(
+                        np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
+                    )
 
         return data
