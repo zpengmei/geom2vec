@@ -252,10 +252,12 @@ class Preprocessing:
                             np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
                         )
                     )
-                    self._torch_or_numpy = "torch"
                 else:
                     data.append(
                         np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
                     )
+
+        if to_torch:
+            self._torch_or_numpy = "torch"
 
         return data
