@@ -358,7 +358,7 @@ class VAMPNet:
                 range(n_epochs), desc="epoch", total=n_epochs, leave=False
         ):
             for batch_0, batch_1 in tqdm(train_loader):
-                _,loss = self.partial_fit(
+                _, loss = self.partial_fit(
                     (batch_0.to(device=self._device), batch_1.to(device=self._device))
                 )
 
@@ -394,7 +394,7 @@ class VAMPNet:
                         valid_patience_counter += 1
                         if valid_patience_counter > valid_patience:
                             print(f"Validation patience reached at epoch {epoch}")
-                            break
+                            return self
 
                     if self._save_model_interval is not None:
                         if (epoch + 1) % self._save_model_interval == 0:
