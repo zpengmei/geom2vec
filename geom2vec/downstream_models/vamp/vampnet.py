@@ -108,7 +108,7 @@ class VAMPNet_Model:
         return self._lobe_lagged
 
     def transform(
-        self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
+            self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
     ):
         """Transform the data through the trained networks.
 
@@ -135,14 +135,14 @@ class VAMPNet_Model:
 
         output = []
         for data_tensor in map_data_to_tensor(
-            data, device=self._device, dtype=self._dtype
+                data, device=self._device, dtype=self._dtype
         ):
             # revise to batching for large data
             # batching first
             batch_list = []
             batch_size = batch_size
             for i in tqdm(range(0, data_tensor.shape[0], batch_size)):
-                data = data_tensor[i : i + batch_size]
+                data = data_tensor[i: i + batch_size]
                 data = data.to(device=self._device)
                 batch_list.append(net(data).detach().cpu().numpy())
             output.append(np.concatenate(batch_list, axis=0))
@@ -188,18 +188,18 @@ class VAMPNet:
     """
 
     def __init__(
-        self,
-        lobe,
-        lobe_lagged=None,
-        optimizer="Adam",
-        device=None,
-        learning_rate=5e-4,
-        epsilon=1e-6,
-        weight_decay=0,
-        mode="regularize",
-        symmetrized=False,
-        dtype=np.float32,
-        save_model_interval=None,
+            self,
+            lobe,
+            lobe_lagged=None,
+            optimizer="Adam",
+            device=None,
+            learning_rate=5e-4,
+            epsilon=1e-6,
+            weight_decay=0,
+            mode="regularize",
+            symmetrized=False,
+            dtype=np.float32,
+            save_model_interval=None,
     ):
         self._lobe = lobe
         self._lobe_lagged = lobe_lagged
@@ -267,14 +267,15 @@ class VAMPNet:
 
         Parameters
         ----------
-        data : tuple or list of length 3, containing instantaneous and timelagged data and the stop index.
+        data : tuple or list of length 2, containing instantaneous and timelagged data
+            The data to train the lobe(s) on.
 
         Returns
         -------
         self : VAMPNet
         """
 
-        batch_0, batch_1, ind_stop = data[0], data[1], data[2]
+        batch_0, batch_1 = data[0], data[1]
 
         self._lobe.train()
         if self._lobe_lagged is not None:
@@ -287,7 +288,7 @@ class VAMPNet:
         else:
             x_1 = self._lobe_lagged(batch_1)
 
-        loss = self._estimator.fit([x_0, x_1, ind_stop]).loss
+        loss = self._estimator.fit([x_0, x_1]).loss
 
         loss.backward()
         self._optimizer.step()
@@ -298,8 +299,19 @@ class VAMPNet:
         return self, loss
 
     def validate(self, val_data):
+        """Evaluates the currently set lobe(s) on validation data and returns the value of the configured score.
 
-        val_batch_0, val_batch_1, ind_stop = val_data[0], val_data[1], val_data[2]
+        Parameters
+        ----------
+        val_data : tuple or list of length 2, containing instantaneous and time-lagged validation data.
+
+        Returns
+        -------
+        score : torch.Tensor
+            The value of the score.
+        """
+
+        val_batch_0, val_batch_1 = val_data[0], val_data[1]
 
         self._lobe.eval()
         if self._lobe_lagged is not None:
@@ -312,7 +324,7 @@ class VAMPNet:
             else:
                 val_output_1 = self._lobe_lagged(val_batch_1)
 
-            score = self._estimator.fit([val_output_0, val_output_1, ind_stop]).score
+            score = self._estimator.fit([val_output_0, val_output_1]).score
             self._estimator.save()
 
         return score
@@ -331,11 +343,6 @@ class VAMPNet:
              Yield a tuple of batches representing instantaneous and time-lagged samples for validation.
         progress : context manager, default=tqdm
 
-        train_patience : int, default=1000
-            Number of steps to wait for training loss to improve.
-        valid_patience : int, default=1000
-            Number of epochs to wait for validation loss to improve.
-
         Returns
         -------
         self : VAMPNet
@@ -350,14 +357,9 @@ class VAMPNet:
         for epoch in progress(
                 range(n_epochs), desc="epoch", total=n_epochs, leave=False
         ):
-
-            for batch_0, batch_1, ind_stop in tqdm(train_loader):
-                _, loss = self.partial_fit(
-                    (
-                        batch_0.to(device=self._device),
-                        batch_1.to(device=self._device),
-                        ind_stop.to(device=self._device)
-                    )
+            for batch_0, batch_1 in tqdm(train_loader):
+                _,loss = self.partial_fit(
+                    (batch_0.to(device=self._device), batch_1.to(device=self._device))
                 )
 
                 if loss.item() < best_train_score:
@@ -371,12 +373,11 @@ class VAMPNet:
 
             if validation_loader is not None:
                 with torch.no_grad():
-                    for val_batch_0, val_batch_1, ind_stop in validation_loader:
+                    for val_batch_0, val_batch_1 in validation_loader:
                         self.validate(
                             (
                                 val_batch_0.to(device=self._device),
                                 val_batch_1.to(device=self._device),
-                                ind_stop.to(device=self._device)
                             )
                         )
 
@@ -403,7 +404,7 @@ class VAMPNet:
         return self
 
     def transform(
-        self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
+            self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
     ):
         """Transform the data through the trained networks.
 
