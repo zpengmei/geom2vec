@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from grokfast_pytorch import GrokFastAdamW
 from tqdm import *
 from .utils import estimate_koopman_matrix, map_data_to_tensor
 from .dataprocessing import Postprocessing_stopvamp
@@ -192,6 +193,7 @@ class StopVAMPNet:
             optimizer="Adam",
             device=None,
             learning_rate=5e-4,
+            weight_decay=0,
             epsilon=1e-6,
             mode="regularize",
             symmetrized=False,
@@ -221,8 +223,10 @@ class StopVAMPNet:
         self._save_models = []
         self.optimizer_types = {
             "Adam": torch.optim.Adam,
+            "AdamW": torch.optim.AdamW,
             "SGD": torch.optim.SGD,
             "RMSprop": torch.optim.RMSprop,
+            "grokfastadamw": GrokFastAdamW,
         }
         if optimizer not in self.optimizer_types.keys():
             raise ValueError(
@@ -231,13 +235,14 @@ class StopVAMPNet:
         else:
             if self._lobe_lagged is None:
                 self._optimizer = self.optimizer_types[optimizer](
-                    self._lobe.parameters(), lr=learning_rate
+                    self._lobe.parameters(), lr=learning_rate, weight_decay=weight_decay
                 )
             else:
                 self._optimizer = self.optimizer_types[optimizer](
                     list(self._lobe.parameters())
                     + list(self._lobe_lagged.parameters()),
                     lr=learning_rate,
+                    weight_decay=weight_decay,
                 )
 
         self._training_scores = []
@@ -288,7 +293,7 @@ class StopVAMPNet:
         self._training_scores.append((-loss).item())
         self._step += 1
 
-        return self
+        return self, loss
 
     def validate(self, val_data):
 
@@ -310,7 +315,8 @@ class StopVAMPNet:
 
         return score
 
-    def fit(self, train_loader, n_epochs=1, validation_loader=None, progress=tqdm):
+    def fit(self, train_loader, n_epochs=1, validation_loader=None, progress=tqdm,
+            train_patience=1000, valid_patience=1000):
         """Performs fit on data.
 
         Parameters
@@ -323,24 +329,43 @@ class StopVAMPNet:
              Yield a tuple of batches representing instantaneous and time-lagged samples for validation.
         progress : context manager, default=tqdm
 
+        train_patience : int, default=1000
+            Number of steps to wait for training loss to improve.
+        valid_patience : int, default=1000
+            Number of epochs to wait for validation loss to improve.
+
         Returns
         -------
         self : VAMPNet
         """
 
         self._step = 0
+        best_train_score = float("inf")
+        best_valid_score = float("inf")
+        train_patience_counter = 0
+        valid_patience_counter = 0
 
         for epoch in progress(
                 range(n_epochs), desc="epoch", total=n_epochs, leave=False
         ):
+
             for batch_0, batch_1, ind_stop in tqdm(train_loader):
-                self.partial_fit(
+                _, loss = self.partial_fit(
                     (
                         batch_0.to(device=self._device),
                         batch_1.to(device=self._device),
                         ind_stop.to(device=self._device)
                      )
                 )
+
+                if loss.item() < best_train_score:
+                    best_train_score = loss.item()
+                    train_patience_counter = 0
+                else:
+                    train_patience_counter += 1
+                    if train_patience_counter > train_patience:
+                        print(f"Training patience reached at epoch {epoch}")
+                        break
 
             if validation_loader is not None:
                 with torch.no_grad():
@@ -358,6 +383,15 @@ class StopVAMPNet:
                     self._estimator.clear()
 
                     print(epoch, mean_score.item())
+
+                    if mean_score.item() < best_valid_score:
+                        best_valid_score = mean_score.item()
+                        valid_patience_counter = 0
+                    else:
+                        valid_patience_counter += 1
+                        if valid_patience_counter > valid_patience:
+                            print(f"Validation patience reached at epoch {epoch}")
+                            break
 
                     if self._save_model_interval is not None:
                         if (epoch + 1) % self._save_model_interval == 0:

@@ -1,11 +1,11 @@
 from typing import Optional
-
 import numpy as np
 import torch
 import torch.nn as nn
 from scipy.special import expit
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from grokfast_pytorch import GrokFastAdamW
 
 
 class VarComm(nn.Module):
@@ -19,6 +19,7 @@ class VarComm(nn.Module):
         optimizer: str = "adam",
         device: str = "cuda",
         learning_rate: float = 5e-4,
+        weight_decay: float = 0,
         epsilon: float = 1e-1,
         k: float = 10,
         save_model_interval: Optional[int] = None,
@@ -31,14 +32,16 @@ class VarComm(nn.Module):
         self._epsilon = epsilon
         self._k = k
 
-        assert optimizer in ["adam", "adamw", "sgd"]
+        assert optimizer in ["adam", "adamw", "sgd", "grokfastadamw"]
 
         if optimizer == "adam":
-            self._optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate)
+            self._optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate, weight_decay=weight_decay)
         elif optimizer == "adamw":
-            self._optimizer = torch.optim.AdamW(self.parameters(), lr=learning_rate)
+            self._optimizer = torch.optim.AdamW(self.parameters(), lr=learning_rate, weight_decay=weight_decay)
         elif optimizer == "sgd":
-            self._optimizer = torch.optim.SGD(self.parameters(), lr=learning_rate)
+            self._optimizer = torch.optim.SGD(self.parameters(), lr=learning_rate, weight_decay=weight_decay)
+        elif optimizer == "grokfastadamw":
+            self._optimizer = GrokFastAdamW(self.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
         self._step = 0
         self._save_model_interval = save_model_interval
@@ -54,7 +57,7 @@ class VarComm(nn.Module):
     def validation_scores(self):
         return np.array(self._validation_scores)
 
-    def _variational_loss(self, data, ina, inb):
+    def _variational_loss(self, x, ina, inb):
         r"""
         Variational loss function for the committor network.
         Parameters
@@ -89,6 +92,9 @@ class VarComm(nn.Module):
         n_epochs: int = 1,
         validation_loader: Optional[DataLoader] = None,
         progress=tqdm,
+        train_patience: int = 1000,
+        valid_patience: int = 1000,
+
     ):
         r"""
         Fit the committor network to the training data.
@@ -100,12 +106,18 @@ class VarComm(nn.Module):
         n_epochs: number of epochs (passes through the data set)
         validation_loader: validation data loader
         progress
+        train_patience: number of steps to wait for training loss to improve
+        valid_patience: number of steps to wait for validation loss to improve
 
         Returns
         -------
 
         """
         self._step = 0
+        best_train_score = float("inf")
+        best_valid_score = float("inf")
+        train_patience_counter = 0
+        valid_patience_counter = 0
 
         for epoch in progress(
             range(n_epochs), desc="epoch", total=n_epochs, leave=False
@@ -115,6 +127,7 @@ class VarComm(nn.Module):
             k = self._k
 
             model.train()
+
 
             for data, ina, inb in progress(
                 train_loader, desc="batch", total=len(train_loader), leave=False
@@ -131,6 +144,15 @@ class VarComm(nn.Module):
                 optimizer.step()
 
                 self._training_scores.append(loss_var.item() + loss_boundary.item())
+
+                if loss.item() < best_train_score:
+                    best_train_score = loss.item()
+                    train_patience_counter = 0
+                else:
+                    train_patience_counter += 1
+                    if train_patience_counter >= train_patience:
+                        print(f"Training patience reached at epoch {epoch}")
+                        break
 
             if validation_loader is not None:
                 with torch.no_grad():
@@ -151,6 +173,15 @@ class VarComm(nn.Module):
                         losses.append(loss_var.item() + loss_boundary.item())
                     mean_score = np.mean(losses)
                     self._validation_scores.append(mean_score)
+
+                    if mean_score < best_valid_score:
+                        best_valid_score = mean_score
+                        valid_patience_counter = 0
+                    else:
+                        valid_patience_counter += 1
+                        if valid_patience_counter >= valid_patience:
+                            print(f"Validation patience reached at epoch {epoch}")
+                            break
 
                 if self._save_model_interval is not None:
                     if (epoch + 1) % self._save_model_interval == 0:

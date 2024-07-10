@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from grokfast_pytorch import GrokFastAdamW
 from tqdm import *
 from .utils import estimate_koopman_matrix, map_data_to_tensor
 from .dataprocessing import Postprocessing_vamp
@@ -194,6 +195,7 @@ class VAMPNet:
         device=None,
         learning_rate=5e-4,
         epsilon=1e-6,
+        weight_decay=0,
         mode="regularize",
         symmetrized=False,
         dtype=np.float32,
@@ -222,8 +224,11 @@ class VAMPNet:
         self._save_models = []
         self.optimizer_types = {
             "Adam": torch.optim.Adam,
+            "AdamW": torch.optim.AdamW,
             "SGD": torch.optim.SGD,
             "RMSprop": torch.optim.RMSprop,
+            "GrokFastAdamW": GrokFastAdamW,
+
         }
         if optimizer not in self.optimizer_types.keys():
             raise ValueError(
@@ -232,13 +237,14 @@ class VAMPNet:
         else:
             if self._lobe_lagged is None:
                 self._optimizer = self.optimizer_types[optimizer](
-                    self._lobe.parameters(), lr=learning_rate
+                    self._lobe.parameters(), lr=learning_rate, weight_decay=weight_decay
                 )
             else:
                 self._optimizer = self.optimizer_types[optimizer](
                     list(self._lobe.parameters())
                     + list(self._lobe_lagged.parameters()),
                     lr=learning_rate,
+                    weight_decay=weight_decay,
                 )
 
         self._training_scores = []
@@ -261,15 +267,14 @@ class VAMPNet:
 
         Parameters
         ----------
-        data : tuple or list of length 2, containing instantaneous and timelagged data
-            The data to train the lobe(s) on.
+        data : tuple or list of length 3, containing instantaneous and timelagged data and the stop index.
 
         Returns
         -------
         self : VAMPNet
         """
 
-        batch_0, batch_1 = data[0], data[1]
+        batch_0, batch_1, ind_stop = data[0], data[1], data[2]
 
         self._lobe.train()
         if self._lobe_lagged is not None:
@@ -282,7 +287,7 @@ class VAMPNet:
         else:
             x_1 = self._lobe_lagged(batch_1)
 
-        loss = self._estimator.fit([x_0, x_1]).loss
+        loss = self._estimator.fit([x_0, x_1, ind_stop]).loss
 
         loss.backward()
         self._optimizer.step()
@@ -290,22 +295,11 @@ class VAMPNet:
         self._training_scores.append((-loss).item())
         self._step += 1
 
-        return self
+        return self, loss
 
     def validate(self, val_data):
-        """Evaluates the currently set lobe(s) on validation data and returns the value of the configured score.
 
-        Parameters
-        ----------
-        val_data : tuple or list of length 2, containing instantaneous and time-lagged validation data.
-
-        Returns
-        -------
-        score : torch.Tensor
-            The value of the score.
-        """
-
-        val_batch_0, val_batch_1 = val_data[0], val_data[1]
+        val_batch_0, val_batch_1, ind_stop = val_data[0], val_data[1], val_data[2]
 
         self._lobe.eval()
         if self._lobe_lagged is not None:
@@ -318,12 +312,13 @@ class VAMPNet:
             else:
                 val_output_1 = self._lobe_lagged(val_batch_1)
 
-            score = self._estimator.fit([val_output_0, val_output_1]).score
+            score = self._estimator.fit([val_output_0, val_output_1, ind_stop]).score
             self._estimator.save()
 
         return score
 
-    def fit(self, train_loader, n_epochs=1, validation_loader=None, progress=tqdm):
+    def fit(self, train_loader, n_epochs=1, validation_loader=None, progress=tqdm,
+            train_patience=1000, valid_patience=1000):
         """Performs fit on data.
 
         Parameters
@@ -336,28 +331,52 @@ class VAMPNet:
              Yield a tuple of batches representing instantaneous and time-lagged samples for validation.
         progress : context manager, default=tqdm
 
+        train_patience : int, default=1000
+            Number of steps to wait for training loss to improve.
+        valid_patience : int, default=1000
+            Number of epochs to wait for validation loss to improve.
+
         Returns
         -------
         self : VAMPNet
         """
 
         self._step = 0
+        best_train_score = float("inf")
+        best_valid_score = float("inf")
+        train_patience_counter = 0
+        valid_patience_counter = 0
 
         for epoch in progress(
-            range(n_epochs), desc="epoch", total=n_epochs, leave=False
+                range(n_epochs), desc="epoch", total=n_epochs, leave=False
         ):
-            for batch_0, batch_1 in tqdm(train_loader):
-                self.partial_fit(
-                    (batch_0.to(device=self._device), batch_1.to(device=self._device))
+
+            for batch_0, batch_1, ind_stop in tqdm(train_loader):
+                _, loss = self.partial_fit(
+                    (
+                        batch_0.to(device=self._device),
+                        batch_1.to(device=self._device),
+                        ind_stop.to(device=self._device)
+                    )
                 )
+
+                if loss.item() < best_train_score:
+                    best_train_score = loss.item()
+                    train_patience_counter = 0
+                else:
+                    train_patience_counter += 1
+                    if train_patience_counter > train_patience:
+                        print(f"Training patience reached at epoch {epoch}")
+                        break
 
             if validation_loader is not None:
                 with torch.no_grad():
-                    for val_batch_0, val_batch_1 in validation_loader:
+                    for val_batch_0, val_batch_1, ind_stop in validation_loader:
                         self.validate(
                             (
                                 val_batch_0.to(device=self._device),
                                 val_batch_1.to(device=self._device),
+                                ind_stop.to(device=self._device)
                             )
                         )
 
@@ -366,6 +385,15 @@ class VAMPNet:
                     self._estimator.clear()
 
                     print(epoch, mean_score.item())
+
+                    if mean_score.item() < best_valid_score:
+                        best_valid_score = mean_score.item()
+                        valid_patience_counter = 0
+                    else:
+                        valid_patience_counter += 1
+                        if valid_patience_counter > valid_patience:
+                            print(f"Validation patience reached at epoch {epoch}")
+                            break
 
                     if self._save_model_interval is not None:
                         if (epoch + 1) % self._save_model_interval == 0:
