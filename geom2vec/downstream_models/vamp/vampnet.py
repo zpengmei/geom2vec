@@ -369,7 +369,7 @@ class VAMPNet:
                     train_patience_counter += 1
                     if train_patience_counter > train_patience:
                         print(f"Training patience reached at epoch {epoch}")
-                        break
+                        return self
 
             if validation_loader is not None:
                 with torch.no_grad():
@@ -394,7 +394,8 @@ class VAMPNet:
                         valid_patience_counter += 1
                         if valid_patience_counter > valid_patience:
                             print(f"Validation patience reached at epoch {epoch}")
-                            return self
+                            # break the outer loop
+                            break
 
                     if self._save_model_interval is not None:
                         if (epoch + 1) % self._save_model_interval == 0:

@@ -152,7 +152,7 @@ class VarComm(nn.Module):
                     train_patience_counter += 1
                     if train_patience_counter >= train_patience:
                         print(f"Training patience reached at epoch {epoch}")
-                        break
+                        return self
 
             if validation_loader is not None:
                 with torch.no_grad():
