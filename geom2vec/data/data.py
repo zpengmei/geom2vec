@@ -250,7 +250,7 @@ class Preprocessing:
                     data.append(
                         torch.tensor(
                             np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
-                        )
+                        ).squeeze()
                     )
                 else:
                     data.append(
