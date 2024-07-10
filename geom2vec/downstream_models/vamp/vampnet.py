@@ -397,7 +397,7 @@ class VAMPNet:
                             if valid_patience_counter > valid_patience:
                                 print(f"Validation patience reached at epoch {epoch}")
                                 # break the outer loop
-                                break
+                                return self
 
                         if self._save_model_interval is not None:
                             if (epoch + 1) % self._save_model_interval == 0:

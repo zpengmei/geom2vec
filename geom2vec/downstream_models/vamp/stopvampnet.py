@@ -316,7 +316,7 @@ class StopVAMPNet:
         return score
 
     def fit(self, train_loader, n_epochs=1, validation_loader=None, progress=tqdm,
-            train_patience=1000, valid_patience=1000):
+            train_patience=1000, valid_patience=1000,train_valid_interval=1000):
         """Performs fit on data.
 
         Parameters
@@ -344,12 +344,14 @@ class StopVAMPNet:
         best_valid_score = float("inf")
         train_patience_counter = 0
         valid_patience_counter = 0
+        step_counter = 0
 
         for epoch in progress(
                 range(n_epochs), desc="epoch", total=n_epochs, leave=False
         ):
 
             for batch_0, batch_1, ind_stop in tqdm(train_loader):
+                step_counter += 1
                 _, loss = self.partial_fit(
                     (
                         batch_0.to(device=self._device),
@@ -367,36 +369,36 @@ class StopVAMPNet:
                         print(f"Training patience reached at epoch {epoch}")
                         return self
 
-            if validation_loader is not None:
-                with torch.no_grad():
-                    for val_batch_0, val_batch_1, ind_stop in validation_loader:
-                        self.validate(
-                            (
-                                val_batch_0.to(device=self._device),
-                                val_batch_1.to(device=self._device),
-                                ind_stop.to(device=self._device)
+                if validation_loader is not None and step_counter % train_valid_interval == 0:
+                    with torch.no_grad():
+                        for val_batch_0, val_batch_1, ind_stop in validation_loader:
+                            self.validate(
+                                (
+                                    val_batch_0.to(device=self._device),
+                                    val_batch_1.to(device=self._device),
+                                    ind_stop.to(device=self._device)
+                                )
                             )
-                        )
 
-                    mean_score = self._estimator.output_mean_score()
-                    self._validation_scores.append(mean_score.item())
-                    self._estimator.clear()
+                        mean_score = self._estimator.output_mean_score()
+                        self._validation_scores.append(mean_score.item())
+                        self._estimator.clear()
 
-                    print(epoch, mean_score.item())
+                        print(epoch, mean_score.item())
 
-                    if mean_score.item() < best_valid_score:
-                        best_valid_score = mean_score.item()
-                        valid_patience_counter = 0
-                    else:
-                        valid_patience_counter += 1
-                        if valid_patience_counter > valid_patience:
-                            print(f"Validation patience reached at epoch {epoch}")
-                            break
+                        if mean_score.item() < best_valid_score:
+                            best_valid_score = mean_score.item()
+                            valid_patience_counter = 0
+                        else:
+                            valid_patience_counter += 1
+                            if valid_patience_counter > valid_patience:
+                                print(f"Validation patience reached at epoch {epoch}")
+                                return self
 
-                    if self._save_model_interval is not None:
-                        if (epoch + 1) % self._save_model_interval == 0:
-                            m = self.fetch_model()
-                            self._save_models.append((epoch, m))
+                        if self._save_model_interval is not None:
+                            if (epoch + 1) % self._save_model_interval == 0:
+                                m = self.fetch_model()
+                                self._save_models.append((epoch, m))
 
         return self
 

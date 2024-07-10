@@ -94,7 +94,7 @@ class VarComm(nn.Module):
         progress=tqdm,
         train_patience: int = 1000,
         valid_patience: int = 1000,
-
+        train_valid_interval: int = 1000,
     ):
         r"""
         Fit the committor network to the training data.
@@ -118,6 +118,7 @@ class VarComm(nn.Module):
         best_valid_score = float("inf")
         train_patience_counter = 0
         valid_patience_counter = 0
+        step_counter = 0
 
         for epoch in progress(
             range(n_epochs), desc="epoch", total=n_epochs, leave=False
@@ -132,6 +133,7 @@ class VarComm(nn.Module):
             for data, ina, inb in progress(
                 train_loader, desc="batch", total=len(train_loader), leave=False
             ):
+                step_counter += 1
                 optimizer.zero_grad()
                 data = data.to(self._device)
                 ina = ina.to(self._device)
@@ -154,41 +156,41 @@ class VarComm(nn.Module):
                         print(f"Training patience reached at epoch {epoch}")
                         return self
 
-            if validation_loader is not None:
-                with torch.no_grad():
-                    model.eval()
+                if validation_loader is not None and step_counter % train_valid_interval == 0:
+                    with torch.no_grad():
+                        model.eval()
 
-                    losses = []
-                    for data, ina, inb in progress(
-                        validation_loader,
-                        desc="validation",
-                        total=len(validation_loader),
-                        leave=False,
-                    ):
-                        data = data.to(self._device)
-                        ina = ina.to(self._device)
-                        inb = inb.to(self._device)
-                        q = model(data)
-                        loss_var, loss_boundary = self._variational_loss(q, ina, inb)
-                        losses.append(loss_var.item() + loss_boundary.item())
-                    mean_score = np.mean(losses)
-                    self._validation_scores.append(mean_score)
+                        losses = []
+                        for data, ina, inb in progress(
+                            validation_loader,
+                            desc="validation",
+                            total=len(validation_loader),
+                            leave=False,
+                        ):
+                            data = data.to(self._device)
+                            ina = ina.to(self._device)
+                            inb = inb.to(self._device)
+                            q = model(data)
+                            loss_var, loss_boundary = self._variational_loss(q, ina, inb)
+                            losses.append(loss_var.item() + loss_boundary.item())
+                        mean_score = np.mean(losses)
+                        self._validation_scores.append(mean_score)
 
-                    if mean_score < best_valid_score:
-                        best_valid_score = mean_score
-                        valid_patience_counter = 0
-                    else:
-                        valid_patience_counter += 1
-                        if valid_patience_counter >= valid_patience:
-                            print(f"Validation patience reached at epoch {epoch}")
-                            break
+                        if mean_score < best_valid_score:
+                            best_valid_score = mean_score
+                            valid_patience_counter = 0
+                        else:
+                            valid_patience_counter += 1
+                            if valid_patience_counter >= valid_patience:
+                                print(f"Validation patience reached at epoch {epoch}")
+                                return self
 
-                if self._save_model_interval is not None:
-                    if (epoch + 1) % self._save_model_interval == 0:
-                        # save the model with the epoch and the mean score
-                        self._save_models.append(
-                            (epoch, mean_score, model.state_dict())
-                        )
+                    if self._save_model_interval is not None:
+                        if (epoch + 1) % self._save_model_interval == 0:
+                            # save the model with the epoch and the mean score
+                            self._save_models.append(
+                                (epoch, mean_score, model.state_dict())
+                            )
 
         return self
 
