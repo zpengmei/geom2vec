@@ -8,7 +8,7 @@ from tqdm import tqdm
 from grokfast_pytorch import GrokFastAdamW
 
 
-class VarComm(nn.Module):
+class VCN(nn.Module):
     r"""
     Variational committor network for estimating the committor function.
     """
@@ -24,7 +24,7 @@ class VarComm(nn.Module):
         k: float = 10,
         save_model_interval: Optional[int] = None,
     ):
-        super(VarComm, self).__init__()
+        super(VCN, self).__init__()
 
         self._lobe = lobe
         self._learning_rate = learning_rate

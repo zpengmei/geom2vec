@@ -1,5 +1,5 @@
 from .vamp.vampnet import VAMPNet
 from .vamp.stopvampnet import StopVAMPNet
-from .committor.vcn import VarComm
+from .committor.vcn import VCN
 
-__all__ = ["VAMPNet", "StopVAMPNet", "VarComm"]
+__all__ = ["VAMPNet", "StopVAMPNet", "VCN"]
