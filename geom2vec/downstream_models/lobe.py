@@ -165,3 +165,4 @@ class Lobe(torch.nn.Module):
         x = x.reshape(batch_size, num_nodes, -1)
         attn_map = self.mixer.get_weights(x)
         return attn_map
+

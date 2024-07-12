@@ -213,3 +213,14 @@ class VCN(nn.Module):
         q = q.numpy()
         q = np.clip((1 + 2 * eps) * expit(q) - eps, 0, 1)
         return q
+
+    def fetch_model(self):
+        from copy import deepcopy
+
+        return deepcopy(self._lobe)
+
+    def save_model(self, path, name="lobe.pt"):
+        import os
+        torch.save(self._lobe.state_dict(), os.path.join(path, name))
+
+        return self._lobe

@@ -389,7 +389,7 @@ class VAMPNet:
 
                         print(epoch, mean_score.item())
 
-                        if mean_score.item() < best_valid_score:
+                        if mean_score.item() > best_valid_score:
                             best_valid_score = mean_score.item()
                             valid_patience_counter = 0
                         else:
@@ -448,3 +448,13 @@ class VAMPNet:
         lobe = deepcopy(self._lobe)
         lobe_lagged = deepcopy(self._lobe_lagged)
         return VAMPNet_Model(lobe, lobe_lagged, device=self._device, dtype=self._dtype)
+
+    def save_model(self, path, name="lobe.pt", name_lagged="lobe_lagged.pt"):
+        import os
+        torch.save(self._lobe.state_dict(), os.path.join(path, name))
+        if self._lobe_lagged is not None:
+            torch.save(self._lobe_lagged.state_dict(), os.path.join(path, name_lagged))
+
+        return self._lobe, self._lobe_lagged
+
+
