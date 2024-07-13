@@ -86,6 +86,7 @@ elif args.system == 'villin':
 atom_types = [atom.element.symbol for atom in traj.top.atoms]
 mask = [atom != 'H' for atom in atom_types]
 xyz = torch.tensor(traj.xyz).reshape(-1, num_atoms, 3)
+xyz = xyz[:,mask,:]
 if args.system != 'chignolin':
     xyz = xyz[::2]
 
@@ -108,7 +109,7 @@ train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
 val_loader = DataLoader(val_data, batch_size=args.batch_size, shuffle=False)
 
 # Get atomic numbers using MDAnalysis
-u = mda.Universe(topology_file, trajectory_files[0])
+u = mda.Universe(topology_file, trajectory_file)
 protein = u
 protein_residues = protein.select_atoms("prop mass > 1.5 ")  # remove hydrogens
 
@@ -123,7 +124,7 @@ atomic_numbers = torch.tensor(atomic_numbers)
 
 # Define the device
 device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
-
+# device ='cpu'
 # Initialize the representation model
 rep_model = create_model(
     model_type='vis',
@@ -134,6 +135,9 @@ rep_model = create_model(
     device=device
 )
 
+# print(atomic_numbers.shape)
+# print(train_data[0][0].shape)
+# print(xyz.shape)
 # Initialize the Lobe network
 net = Lobe(
     representation_model=rep_model,
