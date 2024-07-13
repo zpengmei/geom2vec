@@ -156,6 +156,7 @@ class VCN(nn.Module):
                     train_patience_counter += 1
                     if train_patience_counter >= train_patience:
                         print(f"Training patience reached at epoch {epoch}")
+                        self._lobe.load_state_dict(best_lobe_state)
                         return self
 
                 if validation_loader is not None and step_counter % train_valid_interval == 0:
