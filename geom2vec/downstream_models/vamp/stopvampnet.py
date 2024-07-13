@@ -340,11 +340,15 @@ class StopVAMPNet:
         """
 
         self._step = 0
-        best_train_score = float("inf")
-        best_valid_score = float("inf")
+        best_train_score = 0
+        best_valid_score = 0
         train_patience_counter = 0
         valid_patience_counter = 0
         step_counter = 0
+
+        best_lobe_state = self._lobe.state_dict()
+        if self._lobe_lagged is not None:
+            best_lobe_lagged_state = self._lobe_lagged.state_dict()
 
         for epoch in progress(
                 range(n_epochs), desc="epoch", total=n_epochs, leave=False
@@ -389,10 +393,18 @@ class StopVAMPNet:
                         if mean_score.item() > best_valid_score:
                             best_valid_score = mean_score.item()
                             valid_patience_counter = 0
+                            best_lobe_state = self._lobe.state_dict()
+                            if self._lobe_lagged is not None:
+                                best_lobe_lagged_state = self._lobe_lagged.state_dict()
                         else:
                             valid_patience_counter += 1
                             if valid_patience_counter > valid_patience:
                                 print(f"Validation patience reached at epoch {epoch}")
+                                self._lobe.load_state_dict(best_lobe_state)
+
+                                if self._lobe_lagged is not None:
+                                    self._lobe_lagged.load_state_dict(best_lobe_lagged_state)
+
                                 return self
 
                         if self._save_model_interval is not None:
