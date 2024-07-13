@@ -196,6 +196,7 @@ class VAMPNet:
             learning_rate=5e-4,
             epsilon=1e-6,
             weight_decay=0,
+            grad_accum_steps=1,
             mode="regularize",
             symmetrized=False,
             dtype=np.float32,
@@ -210,6 +211,7 @@ class VAMPNet:
         self._symmetrized = symmetrized
         self._dtype = dtype
         self._save_model_interval = save_model_interval
+        self._grad_accum_steps = grad_accum_steps
 
         if self._dtype == np.float32:
             self._lobe = self._lobe.float()
@@ -263,7 +265,7 @@ class VAMPNet:
         return np.array(self._validation_scores)
 
     def partial_fit(self, data):
-        """Performs a partial fit on data. This does not perform any batching.
+        """Performs a partial fit on data with gradient accumulation.
 
         Parameters
         ----------
@@ -274,6 +276,7 @@ class VAMPNet:
         -------
         self : VAMPNet
         """
+        grad_accum_steps = self._grad_accum_steps
 
         batch_0, batch_1 = data[0], data[1]
 
@@ -281,7 +284,10 @@ class VAMPNet:
         if self._lobe_lagged is not None:
             self._lobe_lagged.train()
 
-        self._optimizer.zero_grad()
+        # Zero gradients only at the beginning of an accumulation cycle
+        if self._step % grad_accum_steps == 0:
+            self._optimizer.zero_grad()
+
         x_0 = self._lobe(batch_0)
         if self._lobe_lagged is None:
             x_1 = self._lobe(batch_1)
@@ -290,8 +296,13 @@ class VAMPNet:
 
         loss = self._estimator.fit([x_0, x_1]).loss
 
+        # Accumulate gradients
         loss.backward()
-        self._optimizer.step()
+
+        # Step the optimizer only after 'grad_accum_steps' calls to partial_fit
+        if (self._step + 1) % grad_accum_steps == 0:
+            self._optimizer.step()
+            # It's not necessary to zero gradients here since it's done at the start of the cycle
 
         self._training_scores.append((-loss).item())
         self._step += 1
