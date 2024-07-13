@@ -222,5 +222,6 @@ class VCN(nn.Module):
     def save_model(self, path, name="lobe.pt"):
         import os
         torch.save(self._lobe.state_dict(), os.path.join(path, name))
+        torch.save(self, os.path.join(path, "vcn.pt"))
 
         return self._lobe

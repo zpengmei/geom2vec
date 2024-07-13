@@ -452,6 +452,7 @@ class VAMPNet:
     def save_model(self, path, name="lobe.pt", name_lagged="lobe_lagged.pt"):
         import os
         torch.save(self._lobe.state_dict(), os.path.join(path, name))
+        torch.save(self, os.path.join(path, "vampnet.pt"))
         if self._lobe_lagged is not None:
             torch.save(self._lobe_lagged.state_dict(), os.path.join(path, name_lagged))
 
