@@ -22,7 +22,7 @@ atomic_mapping = {"H": 1, "C": 6, "N": 7, "O": 8, "P": 15, "S": 16, "F": 9, "Cl"
 
 def create_model(
     model_type,
-    checkpoint_path,
+    checkpoint_path=None,
     cutoff=7.5,
     hidden_channels=128,
     num_layers=6,
@@ -74,9 +74,17 @@ def create_model(
         )
         model = create_model(args)
 
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    model.load_state_dict(checkpoint, strict=False)
-    model.eval()
+    if checkpoint_path is not None:
+        try:
+            checkpoint = torch.load(checkpoint_path, map_location=device)
+            model.load_state_dict(checkpoint, strict=False)
+            model.eval()
+            print(f"Model loaded from {checkpoint_path}")
+        except Exception as e:
+            print(f"Error loading the model from {checkpoint_path}")
+
+    else:
+        print("Model created from scratch.")
 
     return model.to(device)
 
