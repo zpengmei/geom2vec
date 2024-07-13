@@ -197,6 +197,7 @@ class VCN(nn.Module):
                                 (epoch, mean_score, model.state_dict())
                             )
 
+        self._lobe.load_state_dict(best_lobe_state)
         return self
 
     def transform(self, dataset, batch_size):

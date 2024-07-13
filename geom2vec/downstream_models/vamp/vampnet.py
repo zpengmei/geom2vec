@@ -432,6 +432,9 @@ class VAMPNet:
                                 m = self.fetch_model()
                                 self._save_models.append((epoch, m))
 
+        self._lobe.load_state_dict(best_lobe_state)
+        if self._lobe_lagged is not None:
+            self._lobe_lagged.load_state_dict(best_lobe_lagged_state)
         return self
 
     def transform(
