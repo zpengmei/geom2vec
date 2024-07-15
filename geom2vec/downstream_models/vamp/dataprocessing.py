@@ -1,4 +1,3 @@
-import torch
 import numpy as np
 from .utils import rao_blackwell_ledoit_wolf
 from geom2vec.data.data import Preprocessing
@@ -35,6 +34,8 @@ class Postprocessing_vac(Preprocessing):
         self._eigenvalues = None
         self._eigenvectors = None
         self._time_scales = None
+
+        self._torch_or_numpy = "numpy"
 
     @property
     def shrinkage(self):
@@ -92,17 +93,11 @@ class Postprocessing_vac(Preprocessing):
         return self
 
     def _cal_mean(self, data):
+
         dataset = self.create_time_lagged_dataset(data, self._lag_time)
-
-        if self._torch_or_numpy == "torch":
-            d0, d1 = map(torch.tensor, zip(*dataset))
-        else:
-            d0, d1 = map(np.array, zip(*dataset))
-
+        d0, d1 = map(np.array, zip(*dataset))
         mean = (d0.mean(0) + d1.mean(0)) / 2.0
 
-        if self._torch_or_numpy == "torch":
-            mean = mean.numpy()
 
         return mean
 
@@ -111,40 +106,20 @@ class Postprocessing_vac(Preprocessing):
         dataset = self.create_time_lagged_dataset(data, self._lag_time)
 
         batch_size = len(dataset)
-        if self._torch_or_numpy == "numpy":
-            d0, d1 = map(np.array, zip(*dataset))
+        d0, d1 = map(np.array, zip(*dataset))
 
-            mean = 0.5 * (d0.mean(0) + d1.mean(0))
+        mean = 0.5 * (d0.mean(0) + d1.mean(0))
 
-            d0_rm = d0 - mean
-            d1_rm = d1 - mean
+        d0_rm = d0 - mean
+        d1_rm = d1 - mean
 
-            c00 = 1.0 / batch_size * np.dot(d0_rm.T, d0_rm)
-            c11 = 1.0 / batch_size * np.dot(d1_rm.T, d1_rm)
-            c01 = 1.0 / batch_size * np.dot(d0_rm.T, d1_rm)
-            c10 = 1.0 / batch_size * np.dot(d1_rm.T, d0_rm)
+        c00 = 1.0 / batch_size * np.dot(d0_rm.T, d0_rm)
+        c11 = 1.0 / batch_size * np.dot(d1_rm.T, d1_rm)
+        c01 = 1.0 / batch_size * np.dot(d0_rm.T, d1_rm)
+        c10 = 1.0 / batch_size * np.dot(d1_rm.T, d0_rm)
 
-            c0 = 0.5 * (c00 + c11)
-            c1 = 0.5 * (c01 + c10)
-
-        else:
-            d0, d1 = map(torch.tensor, zip(*dataset))
-
-            mean = 0.5 * (d0.mean(0) + d1.mean(0))
-
-            d0_rm = d0 - mean
-            d1_rm = d1 - mean
-
-            c00 = 1.0 / batch_size * torch.matmul(d0_rm.T, d0_rm)
-            c11 = 1.0 / batch_size * torch.matmul(d1_rm.T, d1_rm)
-            c01 = 1.0 / batch_size * torch.matmul(d0_rm.T, d1_rm)
-            c10 = 1.0 / batch_size * torch.matmul(d1_rm.T, d0_rm)
-
-            c0 = 0.5 * (c00 + c11)
-            c1 = 0.5 * (c01 + c10)
-
-            c0 = c0.numpy()
-            c1 = c1.numpy()
+        c0 = 0.5 * (c00 + c11)
+        c1 = 0.5 * (c01 + c10)
 
         if self.shrinkage:
             n_observations_ = batch_size + self._lag_time * num_trajs
@@ -154,10 +129,6 @@ class Postprocessing_vac(Preprocessing):
 
     def _cal_eigvals_eigvecs(self, data):
         c0, c1 = self._cal_cov_matrices(data)
-
-        if isinstance(c0, torch.Tensor):
-            c0 = c0.numpy()
-            c1 = c1.numpy()
 
         import scipy.linalg
 
@@ -196,15 +167,9 @@ class Postprocessing_vac(Preprocessing):
         data = self._seq_trajs(data)
         num_trajs = len(data)
 
-        if self._torch_or_numpy == "torch":
-            for i in range(num_trajs):
-                x_rm = data[i] - self._mean
-                x_rm = x_rm.numpy()
-                modes.append(np.dot(x_rm, self._eigenvectors).astype(np.float32))
-        else:
-            for i in range(num_trajs):
-                x_rm = data[i] - self._mean
-                modes.append(np.dot(x_rm, self._eigenvectors).astype(np.float32))
+        for i in range(num_trajs):
+            x_rm = data[i] - self._mean
+            modes.append(np.dot(x_rm, self._eigenvectors).astype(np.float32))
 
         return modes if num_trajs > 1 else modes[0]
 
@@ -249,10 +214,9 @@ class Postprocessing_vac(Preprocessing):
         ### Q: use the mean of fitted data or input data?
         S, C = self._cal_cov_matrices(data)
 
-        if self._torch_or_numpy == "torch":
-            A = A.numpy()
-            S = S.numpy()
-            C = C.numpy()
+        A = A.numpy()
+        S = S.numpy()
+        C = C.numpy()
 
         P = A.T.dot(C).dot(A)
         Q = A.T.dot(S).dot(A)
@@ -277,33 +241,16 @@ class Postprocessing_vac(Preprocessing):
         """
 
         modes = self.transform(data)
-
-        if self._torch_or_numpy == "torch":
-            modes = modes.numpy()
-
         dataset = self.create_time_lagged_dataset(data, self._lag_time)
 
-        if self._torch_or_numpy == "torch":
-            modes0, modes1 = map(torch.tensor, zip(*dataset))
+        modes0, modes1 = map(np.array, zip(*dataset))
 
-            modes0_rm = modes0 - modes0.mean(0)
-            modes1_rm = modes1 - modes1.mean(0)
+        modes0_rm = modes0 - np.mean(modes0, axis=0)
+        modes1_rm = modes1 - np.mean(modes1, axis=0)
 
-            corr = torch.mean(modes0_rm * modes1_rm, dim=0) / (
-                    torch.std(modes0_rm, dim=0) * torch.std(modes1_rm, dim=0)
-            )
-
-            corr = corr.numpy()
-
-        else:
-            modes0, modes1 = map(np.array, zip(*dataset))
-
-            modes0_rm = modes0 - np.mean(modes0, axis=0)
-            modes1_rm = modes1 - np.mean(modes1, axis=0)
-
-            corr = np.mean(modes0_rm * modes1_rm, axis=0) / (
-                    np.std(modes0_rm, axis=0) * np.std(modes1_rm, axis=0)
-            )
+        corr = np.mean(modes0_rm * modes1_rm, axis=0) / (
+                np.std(modes0_rm, axis=0) * np.std(modes1_rm, axis=0)
+        )
 
         return corr
 
@@ -403,8 +350,6 @@ class Postprocessing_vamp(Preprocessing):
         return self
 
     def _inv_sqrt(self, cov_matrix):
-        if isinstance(cov_matrix, torch.Tensor):
-            cov_matrix = cov_matrix.numpy()
 
         import numpy.linalg
 
@@ -423,13 +368,7 @@ class Postprocessing_vamp(Preprocessing):
 
     def _cal_mean(self, data):
         dataset = self.create_time_lagged_dataset(data, self._lag_time)
-        if self._torch_or_numpy == "torch":
-            d0, d1 = map(torch.tensor, zip(*dataset))
-            d0 = d0.numpy()
-            d1 = d1.numpy()
-        else:
-            d0, d1 = map(np.array, zip(*dataset))
-
+        d0, d1 = map(np.array, zip(*dataset))
         return d0.mean(0), d1.mean(0)
 
     def _cal_cov_matrices(self, data):
@@ -437,29 +376,14 @@ class Postprocessing_vamp(Preprocessing):
 
         batch_size = len(dataset)
 
-        if self._torch_or_numpy == "torch":
-            d0, d1 = map(torch.tensor, zip(*dataset))
+        d0, d1 = map(np.array, zip(*dataset))
 
-            d0_rm = d0 - d0.mean(0)
-            d1_rm = d1 - d1.mean(0)
+        d0_rm = d0 - d0.mean(0)
+        d1_rm = d1 - d1.mean(0)
 
-            c00 = 1.0 / batch_size * torch.matmul(d0_rm.T, d0_rm)
-            c11 = 1.0 / batch_size * torch.matmul(d1_rm.T, d1_rm)
-            c01 = 1.0 / batch_size * torch.matmul(d0_rm.T, d1_rm)
-
-            c00 = c00.numpy()
-            c11 = c11.numpy()
-            c01 = c01.numpy()
-
-        else:
-            d0, d1 = map(np.array, zip(*dataset))
-
-            d0_rm = d0 - d0.mean(0)
-            d1_rm = d1 - d1.mean(0)
-
-            c00 = 1.0 / batch_size * np.dot(d0_rm.T, d0_rm)
-            c11 = 1.0 / batch_size * np.dot(d1_rm.T, d1_rm)
-            c01 = 1.0 / batch_size * np.dot(d0_rm.T, d1_rm)
+        c00 = 1.0 / batch_size * np.dot(d0_rm.T, d0_rm)
+        c11 = 1.0 / batch_size * np.dot(d1_rm.T, d1_rm)
+        c01 = 1.0 / batch_size * np.dot(d0_rm.T, d1_rm)
 
         return c00, c01, c11
 
@@ -644,8 +568,6 @@ class Postprocessing_stopvamp(Preprocessing):
         return self
 
     def _inv_sqrt(self, cov_matrix):
-        if isinstance(cov_matrix, torch.Tensor):
-            cov_matrix = cov_matrix.numpy()
 
         import numpy.linalg
 
@@ -664,12 +586,8 @@ class Postprocessing_stopvamp(Preprocessing):
 
     def _cal_mean(self, dataset):
         # dataset = self.create_time_lagged_stop_dataset(data, ina, inb, self._lag_time)
-        if self._torch_or_numpy == "torch":
-            d0, d1, _ = map(torch.tensor, zip(*dataset))
-            d0 = d0.numpy()
-            d1 = d1.numpy()
-        else:
-            d0, d1 = map(np.array, zip(*dataset))
+
+        d0, d1 = map(np.array, zip(*dataset))
 
         return d0.mean(0), d1.mean(0)
 
@@ -677,33 +595,14 @@ class Postprocessing_stopvamp(Preprocessing):
         # dataset = self.create_time_lagged_stop_dataset(data, ina, inb, self._lag_time)
 
         batch_size = len(dataset)
+        d0, d1, ind_stop = map(np.array, zip(*dataset))
 
-        if self._torch_or_numpy == "torch":
-            d0, d1, ind_stop = map(torch.tensor, zip(*dataset))
+        d0_rm = d0
+        d1_rm = d1
 
-            # d0_rm = d0 - d0.mean(0)
-            # d1_rm = d1 - d1.mean(0)
-
-            d0_rm = d0
-            d1_rm = d1
-
-            c00 = 1.0 / batch_size * torch.matmul(d0_rm.T, d0_rm)
-            c11 = 1.0 / batch_size * torch.matmul(d1_rm.T, d1_rm)
-            c01 = 1.0 / batch_size * torch.matmul(d0_rm.T, ind_stop * d1_rm)
-
-            c00 = c00.numpy()
-            c11 = c11.numpy()
-            c01 = c01.numpy()
-
-        else:
-            d0, d1, ind_stop = map(np.array, zip(*dataset))
-
-            d0_rm = d0
-            d1_rm = d1
-
-            c00 = 1.0 / batch_size * np.dot(d0_rm.T, d0_rm)
-            c11 = 1.0 / batch_size * np.dot(d1_rm.T, d1_rm)
-            c01 = 1.0 / batch_size * np.dot(d0_rm.T, ind_stop * d1_rm)
+        c00 = 1.0 / batch_size * np.dot(d0_rm.T, d0_rm)
+        c11 = 1.0 / batch_size * np.dot(d1_rm.T, d1_rm)
+        c01 = 1.0 / batch_size * np.dot(d0_rm.T, ind_stop * d1_rm)
 
         return c00, c01, c11
 
