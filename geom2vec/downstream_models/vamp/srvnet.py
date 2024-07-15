@@ -1,8 +1,9 @@
 import numpy as np
 import torch
 from tqdm import *
-from .utils import estimate_c_tilde_matrix, map_data_to_tensor
+
 from .dataprocessing import Postprocessing_vac
+from .utils import estimate_c_tilde_matrix, map_data_to_tensor
 
 
 class SRVNet_Estimator:
@@ -41,7 +42,7 @@ class SRVNet_Estimator:
 
         c_tilde = estimate_c_tilde_matrix(data[0], data[1])
         self._eigenvalues, _ = torch.linalg.eigh(c_tilde)
-        self._score = torch.sum(self._eigenvalues ** 2) + 1
+        self._score = torch.sum(self._eigenvalues**2) + 1
         self._is_fitted = True
 
         return self
@@ -130,14 +131,14 @@ class SRVNet_Model:
 
         output = []
         for data_tensor in map_data_to_tensor(
-                data, device=self._device, dtype=self._dtype
+            data, device=self._device, dtype=self._dtype
         ):
             # revise to batching for large data
             # batching first
             batch_list = []
             batch_size = batch_size
             for i in tqdm(range(0, data_tensor.shape[0], batch_size)):
-                data = data_tensor[i: i + batch_size]
+                data = data_tensor[i : i + batch_size]
                 data = data.to(device=self._device)
                 batch_list.append(net(data).detach().cpu().numpy())
             output.append(np.concatenate(batch_list, axis=0))
@@ -176,14 +177,14 @@ class SRVNet:
     """
 
     def __init__(
-            self,
-            lobe,
-            optimizer="Adam",
-            device=None,
-            learning_rate=5e-4,
-            epsilon=1e-6,
-            dtype=np.float32,
-            save_model_interval=None,
+        self,
+        lobe,
+        optimizer="Adam",
+        device=None,
+        learning_rate=5e-4,
+        epsilon=1e-6,
+        dtype=np.float32,
+        save_model_interval=None,
     ):
         self._lobe = lobe
         self._device = device
@@ -317,7 +318,7 @@ class SRVNet:
         self._step = 0
 
         for epoch in progress(
-                range(n_epochs), desc="epoch", total=n_epochs, leave=False
+            range(n_epochs), desc="epoch", total=n_epochs, leave=False
         ):
             for batch_0, batch_1 in train_loader:
                 self.partial_fit(
@@ -391,6 +392,7 @@ class SRVNet:
 
     def save_model(self, path, name="lobe.pt"):
         import os
+
         torch.save(self._lobe.state_dict(), os.path.join(path, name))
         torch.save(self, os.path.join(path, "srvampnet.pt"))
 

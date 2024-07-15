@@ -1,9 +1,9 @@
-from ase.io import read
-import torch
 import numpy as np
-from torch_geometric.data import InMemoryDataset, Data
-from tqdm import tqdm
+import torch
 from ase.data import covalent_radii
+from ase.io import read
+from torch_geometric.data import Data, InMemoryDataset
+from tqdm import tqdm
 
 
 class DenaliDataset(InMemoryDataset):

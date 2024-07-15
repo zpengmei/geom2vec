@@ -1,11 +1,12 @@
 from typing import Optional
+
 import numpy as np
 import torch
 import torch.nn as nn
+from grokfast_pytorch import GrokFastAdamW
 from scipy.special import expit
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from grokfast_pytorch import GrokFastAdamW
 
 
 class VCN(nn.Module):
@@ -35,13 +36,21 @@ class VCN(nn.Module):
         assert optimizer in ["adam", "adamw", "sgd", "grokfastadamw"]
 
         if optimizer == "adam":
-            self._optimizer = torch.optim.Adam(self.parameters(), lr=learning_rate, weight_decay=weight_decay)
+            self._optimizer = torch.optim.Adam(
+                self.parameters(), lr=learning_rate, weight_decay=weight_decay
+            )
         elif optimizer == "adamw":
-            self._optimizer = torch.optim.AdamW(self.parameters(), lr=learning_rate, weight_decay=weight_decay)
+            self._optimizer = torch.optim.AdamW(
+                self.parameters(), lr=learning_rate, weight_decay=weight_decay
+            )
         elif optimizer == "sgd":
-            self._optimizer = torch.optim.SGD(self.parameters(), lr=learning_rate, weight_decay=weight_decay)
+            self._optimizer = torch.optim.SGD(
+                self.parameters(), lr=learning_rate, weight_decay=weight_decay
+            )
         elif optimizer == "grokfastadamw":
-            self._optimizer = GrokFastAdamW(self.parameters(), lr=learning_rate, weight_decay=weight_decay)
+            self._optimizer = GrokFastAdamW(
+                self.parameters(), lr=learning_rate, weight_decay=weight_decay
+            )
 
         self._step = 0
         self._save_model_interval = save_model_interval
@@ -101,7 +110,7 @@ class VCN(nn.Module):
 
         Parameters
         ----------
-        train_loader: training data loader. Should yield batches of time-lagged 
+        train_loader: training data loader. Should yield batches of time-lagged
             data with shape (2, n_batch, n_dim), in_A, and in_B
         n_epochs: number of epochs (passes through the data set)
         validation_loader: validation data loader
@@ -121,7 +130,6 @@ class VCN(nn.Module):
         step_counter = 0
         best_lobe_state = self._lobe.state_dict()
 
-
         for epoch in progress(
             range(n_epochs), desc="epoch", total=n_epochs, leave=False
         ):
@@ -130,7 +138,6 @@ class VCN(nn.Module):
             k = self._k
 
             model.train()
-
 
             for data, ina, inb in progress(
                 train_loader, desc="batch", total=len(train_loader), leave=False
@@ -159,7 +166,10 @@ class VCN(nn.Module):
                         self._lobe.load_state_dict(best_lobe_state)
                         return self
 
-                if validation_loader is not None and step_counter % train_valid_interval == 0:
+                if (
+                    validation_loader is not None
+                    and step_counter % train_valid_interval == 0
+                ):
                     with torch.no_grad():
                         model.eval()
 
@@ -174,7 +184,9 @@ class VCN(nn.Module):
                             ina = ina.to(self._device)
                             inb = inb.to(self._device)
                             q = model(data)
-                            loss_var, loss_boundary = self._variational_loss(q, ina, inb)
+                            loss_var, loss_boundary = self._variational_loss(
+                                q, ina, inb
+                            )
                             losses.append(loss_var.item() + loss_boundary.item())
                         mean_score = np.mean(losses)
                         self._validation_scores.append(mean_score)
@@ -227,6 +239,7 @@ class VCN(nn.Module):
 
     def save_model(self, path, name="lobe.pt"):
         import os
+
         torch.save(self._lobe.state_dict(), os.path.join(path, name))
         torch.save(self, os.path.join(path, "vcn.pt"))
 

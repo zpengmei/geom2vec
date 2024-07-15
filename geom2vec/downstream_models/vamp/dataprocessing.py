@@ -1,6 +1,8 @@
 import numpy as np
+import torch
+
+from ...data.data import Preprocessing
 from .utils import rao_blackwell_ledoit_wolf
-from geom2vec.data.data import Preprocessing
 
 
 class Postprocessing_vac(Preprocessing):
@@ -34,8 +36,6 @@ class Postprocessing_vac(Preprocessing):
         self._eigenvalues = None
         self._eigenvectors = None
         self._time_scales = None
-
-        self._torch_or_numpy = "numpy"
 
     @property
     def shrinkage(self):
@@ -96,6 +96,7 @@ class Postprocessing_vac(Preprocessing):
 
         dataset = self.create_time_lagged_dataset(data, self._lag_time)
         d0, d1 = map(np.array, zip(*dataset))
+
         mean = (d0.mean(0) + d1.mean(0)) / 2.0
 
 

@@ -2,16 +2,13 @@
 # Distributed under the MIT License.
 # (See accompanying file README.md file or copy at http://opensource.org/licenses/MIT)
 
-import torch
 from typing import Optional, Tuple
+
+import torch
 from torch import Tensor, nn
-from .utils import (
-    CosineCutoff,
-    # OptimizedDistance,
-    Distance,
-    rbf_class_mapping,
-    act_class_mapping,
-)
+
+from .utils import (CosineCutoff, Distance,  # OptimizedDistance,
+                    act_class_mapping, rbf_class_mapping)
 
 __all__ = ["TensorNet"]
 torch.set_float32_matmul_precision("high")
@@ -41,16 +38,18 @@ def vector_to_skewtensor(vector):
 
 
 def skewtensor_to_vector(tensor):
-    '''Converts a skew-symmetric tensor to a vector.'''
-    return torch.stack((tensor[:, :, 1, 2], tensor[:, :, 2, 0], tensor[:, :, 0, 1]), dim=-1)
+    """Converts a skew-symmetric tensor to a vector."""
+    return torch.stack(
+        (tensor[:, :, 1, 2], tensor[:, :, 2, 0], tensor[:, :, 0, 1]), dim=-1
+    )
 
 
 def vector_to_symtensor(vector):
     """Creates a symmetric traceless tensor from the outer product of a vector with itself."""
     tensor = torch.matmul(vector.unsqueeze(-1), vector.unsqueeze(-2))
     I = (tensor.diagonal(offset=0, dim1=-1, dim2=-2)).mean(-1)[
-            ..., None, None
-        ] * torch.eye(3, 3, device=tensor.device, dtype=tensor.dtype)
+        ..., None, None
+    ] * torch.eye(3, 3, device=tensor.device, dtype=tensor.dtype)
     S = 0.5 * (tensor + tensor.transpose(-2, -1)) - I
     return S
 
@@ -58,8 +57,8 @@ def vector_to_symtensor(vector):
 def decompose_tensor(tensor):
     """Full tensor decomposition into irreducible components."""
     I = (tensor.diagonal(offset=0, dim1=-1, dim2=-2)).mean(-1)[
-            ..., None, None
-        ] * torch.eye(3, 3, device=tensor.device, dtype=tensor.dtype)
+        ..., None, None
+    ] * torch.eye(3, 3, device=tensor.device, dtype=tensor.dtype)
     A = 0.5 * (tensor - tensor.transpose(-2, -1))
     S = 0.5 * (tensor + tensor.transpose(-2, -1)) - I
     return I, A, S
@@ -67,7 +66,7 @@ def decompose_tensor(tensor):
 
 def tensor_norm(tensor):
     """Computes Frobenius norm."""
-    return (tensor ** 2).sum((-2, -1))
+    return (tensor**2).sum((-2, -1))
 
 
 class TensorNet(nn.Module):
@@ -129,23 +128,23 @@ class TensorNet(nn.Module):
     """
 
     def __init__(
-            self,
-            hidden_channels=128,
-            num_layers=2,
-            num_rbf=32,
-            rbf_type="expnorm",
-            trainable_rbf=False,
-            activation="silu",
-            cutoff_lower=0,
-            cutoff_upper=4.5,
-            max_num_neighbors=64,
-            max_z=128,
-            equivariance_invariance_group="O(3)",
-            static_shapes=True,
-            vector_output=True,
-            check_errors=True,
-            dtype=torch.float32,
-            box_vecs=None,
+        self,
+        hidden_channels=128,
+        num_layers=2,
+        num_rbf=32,
+        rbf_type="expnorm",
+        trainable_rbf=False,
+        activation="silu",
+        cutoff_lower=0,
+        cutoff_upper=4.5,
+        max_num_neighbors=64,
+        max_z=128,
+        equivariance_invariance_group="O(3)",
+        static_shapes=True,
+        vector_output=True,
+        check_errors=True,
+        dtype=torch.float32,
+        box_vecs=None,
     ):
         super(TensorNet, self).__init__()
 
@@ -236,19 +235,19 @@ class TensorNet(nn.Module):
         self.out_norm.reset_parameters()
 
     def forward(
-            self,
-            z: Tensor,
-            pos: Tensor,
-            batch: Tensor,
-            box: Optional[Tensor] = None,
-            q: Optional[Tensor] = None,
-            s: Optional[Tensor] = None,
+        self,
+        z: Tensor,
+        pos: Tensor,
+        batch: Tensor,
+        box: Optional[Tensor] = None,
+        q: Optional[Tensor] = None,
+        s: Optional[Tensor] = None,
     ) -> Tuple[Tensor, Optional[Tensor], Tensor, Tensor, Tensor]:
         # Obtain graph, with distances and relative position vectors
         edge_index, edge_weight, edge_vec = self.distance(pos, batch)
         # This assert convinces TorchScript that edge_vec is a Tensor and not an Optional[Tensor]
         assert (
-                edge_vec is not None
+            edge_vec is not None
         ), "Distance module did not return directional information"
         # Distance module returns -1 for non-existing edges, to avoid having to resize the tensors when we want to ensure static shapes (for CUDA graphs) we make all non-existing edges pertain to a ghost atom
         # Total charge q is a molecule-wise property. We transform it into an atom-wise property, with all atoms belonging to the same molecule being assigned the same charge q
@@ -305,15 +304,15 @@ class TensorEmbedding(nn.Module):
     """
 
     def __init__(
-            self,
-            hidden_channels,
-            num_rbf,
-            activation,
-            cutoff_lower,
-            cutoff_upper,
-            trainable_rbf=False,
-            max_z=128,
-            dtype=torch.float32,
+        self,
+        hidden_channels,
+        num_rbf,
+        activation,
+        cutoff_lower,
+        cutoff_upper,
+        trainable_rbf=False,
+        max_z=128,
+        dtype=torch.float32,
     ):
         super(TensorEmbedding, self).__init__()
 
@@ -363,7 +362,7 @@ class TensorEmbedding(nn.Module):
         return Zij
 
     def _get_tensor_messages(
-            self, Zij: Tensor, edge_weight: Tensor, edge_vec_norm: Tensor, edge_attr: Tensor
+        self, Zij: Tensor, edge_weight: Tensor, edge_vec_norm: Tensor, edge_attr: Tensor
     ) -> Tuple[Tensor, Tensor, Tensor]:
         C = self.cutoff(edge_weight).reshape(-1, 1, 1, 1) * Zij
         eye = torch.eye(3, 3, device=edge_vec_norm.device, dtype=edge_vec_norm.dtype)[
@@ -371,24 +370,24 @@ class TensorEmbedding(nn.Module):
         ]
         Iij = self.distance_proj1(edge_attr)[..., None, None] * C * eye
         Aij = (
-                self.distance_proj2(edge_attr)[..., None, None]
-                * C
-                * vector_to_skewtensor(edge_vec_norm)[..., None, :, :]
+            self.distance_proj2(edge_attr)[..., None, None]
+            * C
+            * vector_to_skewtensor(edge_vec_norm)[..., None, :, :]
         )
         Sij = (
-                self.distance_proj3(edge_attr)[..., None, None]
-                * C
-                * vector_to_symtensor(edge_vec_norm)[..., None, :, :]
+            self.distance_proj3(edge_attr)[..., None, None]
+            * C
+            * vector_to_symtensor(edge_vec_norm)[..., None, :, :]
         )
         return Iij, Aij, Sij
 
     def forward(
-            self,
-            z: Tensor,
-            edge_index: Tensor,
-            edge_weight: Tensor,
-            edge_vec_norm: Tensor,
-            edge_attr: Tensor,
+        self,
+        z: Tensor,
+        edge_index: Tensor,
+        edge_weight: Tensor,
+        edge_vec_norm: Tensor,
+        edge_attr: Tensor,
     ) -> Tensor:
         Zij = self._get_atomic_number_message(z, edge_index)
         Iij, Aij, Sij = self._get_tensor_messages(
@@ -405,23 +404,23 @@ class TensorEmbedding(nn.Module):
             norm = self.act(linear_scalar(norm))
         norm = norm.reshape(-1, self.hidden_channels, 3)
         I = (
-                self.linears_tensor[0](I.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-                * norm[..., 0, None, None]
+            self.linears_tensor[0](I.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+            * norm[..., 0, None, None]
         )
         A = (
-                self.linears_tensor[1](A.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-                * norm[..., 1, None, None]
+            self.linears_tensor[1](A.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+            * norm[..., 1, None, None]
         )
         S = (
-                self.linears_tensor[2](S.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-                * norm[..., 2, None, None]
+            self.linears_tensor[2](S.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+            * norm[..., 2, None, None]
         )
         X = I + A + S
         return X
 
 
 def tensor_message_passing(
-        edge_index: Tensor, factor: Tensor, tensor: Tensor, natoms: int
+    edge_index: Tensor, factor: Tensor, tensor: Tensor, natoms: int
 ) -> Tensor:
     """Message passing for tensors."""
     msg = factor * tensor.index_select(0, edge_index[1])
@@ -438,14 +437,14 @@ class Interaction(nn.Module):
     """
 
     def __init__(
-            self,
-            num_rbf,
-            hidden_channels,
-            activation,
-            cutoff_lower,
-            cutoff_upper,
-            equivariance_invariance_group,
-            dtype=torch.float32,
+        self,
+        num_rbf,
+        hidden_channels,
+        activation,
+        cutoff_lower,
+        cutoff_upper,
+        equivariance_invariance_group,
+        dtype=torch.float32,
     ):
         super(Interaction, self).__init__()
 
@@ -478,12 +477,12 @@ class Interaction(nn.Module):
             linear.reset_parameters()
 
     def forward(
-            self,
-            X: Tensor,
-            edge_index: Tensor,
-            edge_weight: Tensor,
-            edge_attr: Tensor,
-            q: Tensor,
+        self,
+        X: Tensor,
+        edge_index: Tensor,
+        edge_weight: Tensor,
+        edge_attr: Tensor,
+        q: Tensor,
     ) -> Tensor:
         C = self.cutoff(edge_weight)
         for linear_scalar in self.linears_scalar:

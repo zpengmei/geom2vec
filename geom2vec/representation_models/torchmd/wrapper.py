@@ -1,4 +1,5 @@
-from abc import abstractmethod, ABCMeta
+from abc import ABCMeta, abstractmethod
+
 from torch import nn
 
 
