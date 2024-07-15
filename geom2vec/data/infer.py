@@ -3,6 +3,7 @@ from collections import Counter
 from typing import List
 
 import MDAnalysis as mda
+import mdtraj as md
 import numpy as np
 import torch
 from torch_scatter import scatter
@@ -22,13 +23,13 @@ atomic_mapping = {"H": 1, "C": 6, "N": 7, "O": 8, "P": 15, "S": 16, "F": 9, "Cl"
 
 
 def create_model(
-    model_type,
-    checkpoint_path=None,
-    cutoff=7.5,
-    hidden_channels=128,
-    num_layers=6,
-    num_rbf=64,
-    device="cuda",
+        model_type,
+        checkpoint_path=None,
+        cutoff=7.5,
+        hidden_channels=128,
+        num_layers=6,
+        num_rbf=64,
+        device="cuda",
 ):
     assert model_type in ["et", "vis", "tn"]  # only support ET, ViSNet, and TensorNet
 
@@ -87,18 +88,18 @@ def create_model(
 
 
 def infer_traj(
-    model: torch.nn.Module,
-    hidden_channels: int,
-    data: List[np.ndarray],
-    atomic_numbers: np.ndarray,
-    device: torch.device,
-    saving_path: str,
-    batch_size: int = 32,
-    cg_mapping: np.ndarray = None,
-    atom_mask: np.ndarray = None,
-    cg_mask: np.ndarray = None,
-    torch_or_numpy: str = "torch",
-    file_name_list: List[str] = None,
+        model: torch.nn.Module,
+        hidden_channels: int,
+        data: List[np.ndarray],
+        atomic_numbers: np.ndarray,
+        device: torch.device,
+        saving_path: str,
+        batch_size: int = 32,
+        cg_mapping: np.ndarray = None,
+        atom_mask: np.ndarray = None,
+        cg_mask: np.ndarray = None,
+        torch_or_numpy: str = "torch",
+        file_name_list: List[str] = None,
 ):
     """
     This function is used to infer the trajectories of data.
@@ -170,10 +171,10 @@ def infer_traj(
                     cg_rep = scatter(atom_rep, cg_map, dim=1, reduce="add")
                     if cg_mask is not None:
                         cg_rep = cg_rep[
-                            :,
-                            cg_mask,
-                            :,
-                        ]
+                                 :,
+                                 cg_mask,
+                                 :,
+                                 ]
 
                     cg_rep.detach().cpu()
                     out_list.append(cg_rep)
@@ -257,7 +258,7 @@ def extract_mda_info(protein, stride=1, selection=None):
 
 
 def extract_mda_info_folder(
-    folder, top_file, stride=1, selection=None, file_postfix=".dcd"
+        folder, top_file, stride=1, selection=None, file_postfix=".dcd"
 ):
     r"""
     do the extraction for all the files in the folder
@@ -296,6 +297,92 @@ def extract_mda_info_folder(
         positions, atomic_numbers, segment_counts = extract_mda_info(
             u, stride=stride, selection=selection
         )
+        position_list.append(positions)
+
+    return position_list, atomic_numbers, segment_counts, dcd_files
+
+
+def extract_mdtraj_info(md_traj_object, exclude_hydrogens=True):
+    '''
+    Extracts the positions, atomic numbers, and segment counts from a mdtraj object
+    Args:
+        md_traj_object: mdtraj trajectory object after selection
+        exclude_hydrogens: whether to exclude hydrogens from the data
+
+    Returns:
+        positions: positions of the atoms x,y,z
+        atomic_numbers: atomic numbers of the atoms
+        segment_counts: CG mapping using the residue indices
+
+    '''
+    atomic_numbers = [atom.element.atomic_number for atom in md_traj_object.top.atoms]
+    atomic_numbers = np.array(atomic_numbers)
+    residue_indices = [atom.residue.index for atom in md_traj_object.top.atoms]
+    residue_indices = np.array(residue_indices)
+    positions = md_traj_object.xyz
+
+    hydrogen_mask = np.array(atomic_numbers) == 1
+
+    if exclude_hydrogens:
+        positions = positions[:, ~hydrogen_mask]
+        atomic_numbers = atomic_numbers[~hydrogen_mask]
+        segment_counts = count_segments(residue_indices[~hydrogen_mask])
+    else:
+        segment_counts = count_segments(residue_indices)
+
+    return positions, atomic_numbers, segment_counts
+
+
+def extract_mdtraj_info_folder(folder, top_file, stride=1, selection='protein', file_postfix=".dcd", num_trajs=None):
+    r"""
+    do the extraction for all the files in the folder
+
+    Args:
+    - folder: str
+        The folder containing the .dcd files
+    - top_file: str
+        The topology file
+    - stride: int, default = 1
+        The stride to use when extracting the data
+    - selection: str, default = None
+        The selection to use when extracting the data in MDAnalysis. If None, all atoms are selected except hydrogens.
+    - file_postfix: str, default = '.dcd'
+        The postfix of the files to be extracted
+
+    Returns:
+    - position_list: list
+        The list of positions for each trajectory
+    - atomic_numbers: ndarray
+        The atomic numbers of the atoms
+    - segment_counts: ndarray
+        The number counts for each segment
+    - dcd_files: list
+        The list of dcd files in the folder (important for the order of the trajectories)
+    """
+
+    # Get all the .dcd files in the folder
+    dcd_files = [f for f in os.listdir(folder) if f.endswith(file_postfix)]
+    # sort according to the numbers in the file name
+    dcd_files.sort(key=lambda x: int(x.split('-')[-1].split('.')[0]))
+    if num_trajs is not None:
+        dcd_files = dcd_files[:num_trajs]
+
+    position_list = []
+    for traj in dcd_files:
+        print(f"Processing {traj}")
+        mdtraj_object = md.load(os.path.join(folder, traj), top=top_file, stride=stride)
+        if selection == 'protein':
+            mdtraj_object = mdtraj_object.atom_slice(mdtraj_object.top.select('protein'))
+        elif selection == 'backbone':
+            mdtraj_object = mdtraj_object.atom_slice(mdtraj_object.top.select('backbone'))
+        elif selection == 'heavy':
+            mdtraj_object = mdtraj_object.atom_slice(mdtraj_object.top.select('not water and not hydrogen'))
+        elif selection == 'all':
+            pass
+        else:
+            raise ValueError('Invalid selection type')
+
+        positions, atomic_numbers, segment_counts = extract_mdtraj_info(mdtraj_object)
         position_list.append(positions)
 
     return position_list, atomic_numbers, segment_counts, dcd_files
