@@ -226,9 +226,6 @@ class Preprocessing:
         data : list
             The dataset.
         """
-
-        # iterate over the .npz files and load the data
-
         assert mmap_mode in ["r", "r+", "w+", "c", None]
 
         if self._torch_or_numpy == "torch":
@@ -263,3 +260,54 @@ class Preprocessing:
             self._torch_or_numpy = "torch"
 
         return data
+
+    def load_dataset_folder(self, data_path, mmap_mode="r", data_key="arr_0", to_torch=True):
+        """Load the dataset from the file.
+
+        Parameters
+        ----------
+        data_path : str
+            The path to the file.
+            The type of data to be stored in the output file.
+        mmap_mode: str, default = 'r'
+            The mode to open the file. If None, the file will be opened in the default mode.
+
+        Returns
+        -------
+        data : list
+            The dataset.
+        """
+        assert mmap_mode in ["r", "r+", "w+", "c", None]
+
+        files = []
+        for root, _, filenames in os.walk(data_path):
+            if self._torch_or_numpy == "torch":
+                files.extend([os.path.join(root, f) for f in filenames if f.endswith(".pt")])
+            else:
+                files.extend([os.path.join(root, f) for f in filenames if f.endswith(".npz")])
+
+        files = sorted(files, key=lambda x: int(x.split("_")[-1].split(".")[0]))
+
+        data = []
+        for file in tqdm(files):
+            if self._torch_or_numpy == "torch":
+                data.append(
+                    torch.load(file, map_location="cpu", mmap=mmap_mode).to(self._dtype)
+                )
+            else:
+                if to_torch:
+                    data.append(
+                        torch.tensor(
+                            np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
+                        ).squeeze()
+                    )
+                else:
+                    data.append(
+                        np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
+                    )
+
+        if to_torch:
+            self._torch_or_numpy = "torch"
+
+        return data
+
