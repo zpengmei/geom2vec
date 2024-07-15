@@ -189,7 +189,7 @@ def infer_traj(
             # concatenate the output batches
             traj_rep = torch.cat(out_list, dim=0)
             if torch_or_numpy == "numpy":
-                traj_rep = traj_rep.numpy()
+                traj_rep = traj_rep.clone().detach().cpu().numpy()
                 saving_file_name = (
                     file_name_list[i] if file_name_list is not None else f"traj_{i}"
                 )
