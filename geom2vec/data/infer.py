@@ -373,7 +373,13 @@ def extract_mdtraj_info_folder(folder, top_file, stride=1,
     position_list = []
     for traj in dcd_files:
         print(f"Processing {traj}")
-        mdtraj_object = md.load(os.path.join(folder, traj), top=top_file, stride=stride)
+        try:
+            mdtraj_object = md.load(os.path.join(folder, traj), top=top_file, stride=stride)
+        except Exception as e:
+            print(f"Error loading file {traj}")
+            print(e)
+            continue
+
         if selection == 'protein':
             mdtraj_object = mdtraj_object.atom_slice(mdtraj_object.top.select('protein'))
         elif selection == 'backbone':
