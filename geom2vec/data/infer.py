@@ -364,6 +364,8 @@ def extract_mdtraj_info_folder(folder, top_file, stride=1,
 
     # Get all the .dcd files in the folder
     dcd_files = [f for f in os.listdir(folder) if f.endswith(file_postfix)]
+    # Sort the files
+    dcd_files.sort()
 
     if num_trajs is not None:
         dcd_files = dcd_files[:num_trajs]
