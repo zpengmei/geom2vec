@@ -333,7 +333,9 @@ def extract_mdtraj_info(md_traj_object, exclude_hydrogens=True):
     return positions, atomic_numbers, segment_counts
 
 
-def extract_mdtraj_info_folder(folder, top_file, stride=1, selection='protein', file_postfix=".dcd", num_trajs=None):
+def extract_mdtraj_info_folder(folder, top_file, stride=1,
+                               selection='protein', file_postfix=".dcd",
+                               num_trajs=None, exclude_hydrogens=True):
     r"""
     do the extraction for all the files in the folder
 
@@ -382,7 +384,8 @@ def extract_mdtraj_info_folder(folder, top_file, stride=1, selection='protein', 
         else:
             raise ValueError('Invalid selection type')
 
-        positions, atomic_numbers, segment_counts = extract_mdtraj_info(mdtraj_object)
+        positions, atomic_numbers, segment_counts = extract_mdtraj_info(mdtraj_object,
+                                                                        exclude_hydrogens=exclude_hydrogens)
         position_list.append(positions)
 
     return position_list, atomic_numbers, segment_counts, dcd_files
