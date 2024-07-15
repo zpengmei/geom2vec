@@ -1,15 +1,14 @@
-import os
 import argparse
-from tqdm import tqdm
+import os
 from datetime import datetime
 
 import torch
-from torch_geometric.loader import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from torch_geometric.loader import DataLoader
+from tqdm import tqdm
 
 from ...pretrain.datasets.denali import DenaliDataset
 from ...representation_models.torchmd.main_model import create_model, get_args
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--hidden_channels', type=int, default=64)

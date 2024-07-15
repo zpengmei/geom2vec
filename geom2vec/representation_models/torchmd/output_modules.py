@@ -1,10 +1,10 @@
-from abc import abstractmethod, ABCMeta
+from abc import ABCMeta, abstractmethod
 from typing import Optional
 
 import torch
 from torch import nn
 
-from .utils import act_class_mapping, GatedEquivariantBlock
+from .utils import GatedEquivariantBlock, act_class_mapping
 
 
 class OutputModel(nn.Module, metaclass=ABCMeta):

@@ -1,7 +1,8 @@
-import torch
 import numpy as np
-from .utils import rao_blackwell_ledoit_wolf
+import torch
+
 from ...data.data import Preprocessing
+from .utils import rao_blackwell_ledoit_wolf
 
 
 class Postprocessing_vac(Preprocessing):
@@ -290,7 +291,7 @@ class Postprocessing_vac(Preprocessing):
             modes1_rm = modes1 - modes1.mean(0)
 
             corr = torch.mean(modes0_rm * modes1_rm, dim=0) / (
-                    torch.std(modes0_rm, dim=0) * torch.std(modes1_rm, dim=0)
+                torch.std(modes0_rm, dim=0) * torch.std(modes1_rm, dim=0)
             )
 
             corr = corr.numpy()
@@ -302,7 +303,7 @@ class Postprocessing_vac(Preprocessing):
             modes1_rm = modes1 - np.mean(modes1, axis=0)
 
             corr = np.mean(modes0_rm * modes1_rm, axis=0) / (
-                    np.std(modes0_rm, axis=0) * np.std(modes1_rm, axis=0)
+                np.std(modes0_rm, axis=0) * np.std(modes1_rm, axis=0)
             )
 
         return corr

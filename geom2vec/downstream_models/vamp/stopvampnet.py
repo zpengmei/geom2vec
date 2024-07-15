@@ -2,8 +2,9 @@ import numpy as np
 import torch
 from grokfast_pytorch import GrokFastAdamW
 from tqdm import *
-from .utils import estimate_koopman_matrix, map_data_to_tensor
+
 from .dataprocessing import Postprocessing_stopvamp
+from .utils import estimate_koopman_matrix, map_data_to_tensor
 
 
 class VAMPNet_Estimator:
@@ -110,7 +111,7 @@ class VAMPNet_Model:
         return self._lobe_lagged
 
     def transform(
-            self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
+        self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
     ):
         """Transform the data through the trained networks.
 
@@ -136,14 +137,14 @@ class VAMPNet_Model:
 
         output = []
         for data_tensor in map_data_to_tensor(
-                data, device=self._device, dtype=self._dtype
+            data, device=self._device, dtype=self._dtype
         ):
             # revise to batching for large data
             # batching first
             batch_list = []
             batch_size = batch_size
             for i in tqdm(range(0, data_tensor.shape[0], batch_size)):
-                data = data_tensor[i: i + batch_size]
+                data = data_tensor[i : i + batch_size]
                 data = data.to(device=self._device)
                 batch_list.append(net(data).detach().cpu().numpy())
             output.append(np.concatenate(batch_list, axis=0))
@@ -187,18 +188,18 @@ class StopVAMPNet:
     """
 
     def __init__(
-            self,
-            lobe,
-            lobe_lagged=None,
-            optimizer="Adam",
-            device=None,
-            learning_rate=5e-4,
-            weight_decay=0,
-            epsilon=1e-6,
-            mode="regularize",
-            symmetrized=False,
-            dtype=np.float32,
-            save_model_interval=None,
+        self,
+        lobe,
+        lobe_lagged=None,
+        optimizer="Adam",
+        device=None,
+        learning_rate=5e-4,
+        weight_decay=0,
+        epsilon=1e-6,
+        mode="regularize",
+        symmetrized=False,
+        dtype=np.float32,
+        save_model_interval=None,
     ):
         self._lobe = lobe
         self._lobe_lagged = lobe_lagged
@@ -296,7 +297,6 @@ class StopVAMPNet:
         return self, loss
 
     def validate(self, val_data):
-
         val_batch_0, val_batch_1, ind_stop = val_data[0], val_data[1], val_data[2]
 
         self._lobe.eval()
@@ -315,8 +315,16 @@ class StopVAMPNet:
 
         return score
 
-    def fit(self, train_loader, n_epochs=1, validation_loader=None, progress=tqdm,
-            train_patience=1000, valid_patience=1000,train_valid_interval=1000):
+    def fit(
+        self,
+        train_loader,
+        n_epochs=1,
+        validation_loader=None,
+        progress=tqdm,
+        train_patience=1000,
+        valid_patience=1000,
+        train_valid_interval=1000,
+    ):
         """Performs fit on data.
 
         Parameters
@@ -351,17 +359,16 @@ class StopVAMPNet:
             best_lobe_lagged_state = self._lobe_lagged.state_dict()
 
         for epoch in progress(
-                range(n_epochs), desc="epoch", total=n_epochs, leave=False
+            range(n_epochs), desc="epoch", total=n_epochs, leave=False
         ):
-
             for batch_0, batch_1, ind_stop in tqdm(train_loader):
                 step_counter += 1
                 _, loss = self.partial_fit(
                     (
                         batch_0.to(device=self._device),
                         batch_1.to(device=self._device),
-                        ind_stop.to(device=self._device)
-                     )
+                        ind_stop.to(device=self._device),
+                    )
                 )
 
                 if loss.item() < best_train_score:
@@ -376,14 +383,17 @@ class StopVAMPNet:
                             self._lobe_lagged.load_state_dict(best_lobe_lagged_state)
                         return self
 
-                if validation_loader is not None and step_counter % train_valid_interval == 0:
+                if (
+                    validation_loader is not None
+                    and step_counter % train_valid_interval == 0
+                ):
                     with torch.no_grad():
                         for val_batch_0, val_batch_1, ind_stop in validation_loader:
                             self.validate(
                                 (
                                     val_batch_0.to(device=self._device),
                                     val_batch_1.to(device=self._device),
-                                    ind_stop.to(device=self._device)
+                                    ind_stop.to(device=self._device),
                                 )
                             )
 
@@ -406,7 +416,9 @@ class StopVAMPNet:
                                 self._lobe.load_state_dict(best_lobe_state)
 
                                 if self._lobe_lagged is not None:
-                                    self._lobe_lagged.load_state_dict(best_lobe_lagged_state)
+                                    self._lobe_lagged.load_state_dict(
+                                        best_lobe_lagged_state
+                                    )
 
                                 return self
 
@@ -421,7 +433,7 @@ class StopVAMPNet:
         return self
 
     def transform(
-            self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
+        self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
     ):
         """Transform the data through the trained networks.
 
@@ -465,6 +477,7 @@ class StopVAMPNet:
 
     def save_model(self, path, name="lobe.pt", name_lagged="lobe_lagged.pt"):
         import os
+
         torch.save(self._lobe.state_dict(), os.path.join(path, name))
         torch.save(self, os.path.join(path, "stopvampnet.pt"))
         if self._lobe_lagged is not None:

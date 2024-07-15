@@ -1,8 +1,9 @@
 from typing import Optional, Tuple
+
 import torch
+import torch.nn as nn
 from torch import Tensor
 from torch.nn import Linear, Sequential
-import torch.nn as nn
 
 
 class GatedEquivariantBlock(nn.Module):
@@ -128,7 +129,7 @@ class EquivariantScalar(nn.Module):
             x, v = layer(x, v)
 
         return x + v.sum() * 0, v
-    
+
 
 class EquivariantVec(torch.nn.Module):
     r"""Computes final scalar outputs based on node features and vector
@@ -142,18 +143,20 @@ class EquivariantVec(torch.nn.Module):
     def __init__(self, hidden_channels: int) -> None:
         super().__init__()
 
-        self.output_network = torch.nn.ModuleList([
-            GatedEquivariantBlock(
-                hidden_channels,
-                hidden_channels // 2,
-                scalar_activation=True,
-            ),
-            GatedEquivariantBlock(
-                hidden_channels // 2,
-                1,
-                scalar_activation=False,
-            ),
-        ])
+        self.output_network = torch.nn.ModuleList(
+            [
+                GatedEquivariantBlock(
+                    hidden_channels,
+                    hidden_channels // 2,
+                    scalar_activation=True,
+                ),
+                GatedEquivariantBlock(
+                    hidden_channels // 2,
+                    1,
+                    scalar_activation=False,
+                ),
+            ]
+        )
 
         self.reset_parameters()
 

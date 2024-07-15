@@ -1,29 +1,31 @@
+import argparse
 import re
 import warnings
-import argparse
 from typing import Optional, Tuple
 
 import torch
 from torch import nn
 
+from ...layers.equivariant import EquivariantScalar
 from .et import TorchMD_ET
 from .tensornet import TensorNet
-from ...layers.equivariant import EquivariantScalar
 
 
-def get_args(hidden_channels, num_layers, num_rbf, num_heads, cutoff=5.0,rep_model='et'):
+def get_args(
+    hidden_channels, num_layers, num_rbf, num_heads, cutoff=5.0, rep_model="et"
+):
     # Directly create a Namespace object with the required arguments
     args = argparse.Namespace(
         embedding_dimension=hidden_channels,
         num_layers=num_layers,
         num_rbf=num_rbf,
-        activation='silu',
-        rbf_type='expnorm',
+        activation="silu",
+        rbf_type="expnorm",
         trainable_rbf=False,
         neighbor_embedding=False,
-        aggr='add',
-        distance_influence='both',
-        attn_activation='silu',
+        aggr="add",
+        distance_influence="both",
+        attn_activation="silu",
         num_heads=num_heads,
         layernorm_on_vec=None,
         derivative=False,
@@ -33,8 +35,8 @@ def get_args(hidden_channels, num_layers, num_rbf, num_heads, cutoff=5.0,rep_mod
         max_z=100,
         max_num_neighbors=32,
         standardize=False,
-        reduce_op='add',
-        rep_model=rep_model
+        reduce_op="add",
+        rep_model=rep_model,
     )
     return args
 
@@ -64,8 +66,8 @@ def create_model(args, prior_model=None, mean=None, std=None):
         **shared_args,
     )
 
-    if args.rep_model == 'tensornet':
-        representation_model= TensorNet(
+    if args.rep_model == "tensornet":
+        representation_model = TensorNet(
             hidden_channels=args.embedding_dimension,
             num_layers=args.num_layers,
             num_rbf=args.num_rbf,
@@ -77,7 +79,6 @@ def create_model(args, prior_model=None, mean=None, std=None):
             max_num_neighbors=args.max_num_neighbors,
             vector_output=True,
         )
-
 
     # create output network
 
@@ -105,7 +106,7 @@ def load_model(filepath, args=None, device="cpu", mean=None, std=None, **kwargs)
 
     for key, value in kwargs.items():
         if not key in args:
-            warnings.warn(f'Unknown hyperparameter: {key}={value}')
+            warnings.warn(f"Unknown hyperparameter: {key}={value}")
         args[key] = value
 
     model = create_model(args)
@@ -115,8 +116,13 @@ def load_model(filepath, args=None, device="cpu", mean=None, std=None, **kwargs)
 
     if len(loading_return.unexpected_keys) > 0:
         # Should only happen if not applying denoising during fine-tuning.
-        assert all(("output_model_noise" in k or "pos_normalizer" in k) for k in loading_return.unexpected_keys)
-    assert len(loading_return.missing_keys) == 0, f"Missing keys: {loading_return.missing_keys}"
+        assert all(
+            ("output_model_noise" in k or "pos_normalizer" in k)
+            for k in loading_return.unexpected_keys
+        )
+    assert (
+        len(loading_return.missing_keys) == 0
+    ), f"Missing keys: {loading_return.missing_keys}"
 
     if mean:
         model.mean = mean
@@ -128,13 +134,13 @@ def load_model(filepath, args=None, device="cpu", mean=None, std=None, **kwargs)
 
 class TorchMD_Net(nn.Module):
     def __init__(
-            self,
-            representation_model,
-            reduce_op="add",
-            mean=None,
-            std=None,
-            derivative=False,
-            output_model_noise=None,
+        self,
+        representation_model,
+        reduce_op="add",
+        mean=None,
+        std=None,
+        derivative=False,
+        output_model_noise=None,
     ):
         super(TorchMD_Net, self).__init__()
         self.representation_model = representation_model
@@ -163,7 +169,9 @@ class TorchMD_Net(nn.Module):
             pos.requires_grad_(True)
 
         # run the potentially wrapped representation model
-        x_rep, v_rep, z, pos, batch = self.representation_model(z=z, pos=pos, batch=batch)
+        x_rep, v_rep, z, pos, batch = self.representation_model(
+            z=z, pos=pos, batch=batch
+        )
 
         _, noise_pred = self.output_model_noise.pre_reduce(x_rep, v_rep, z, pos, batch)
 
@@ -207,10 +215,10 @@ class AccumulatedNormalization(torch.nn.Module):
             (self.acc_squared_sum / self.acc_count_safe) - self.mean.pow(2)
         ).clamp(min=self._epsilon)
 
-    def forward(self, batch: torch.Tensor,training: bool = True):
+    def forward(self, batch: torch.Tensor, training: bool = True):
         if training:
             self.update_statistics(batch)
-        return ((batch - self.mean) / self.std)
+        return (batch - self.mean) / self.std
 
 
 def main():

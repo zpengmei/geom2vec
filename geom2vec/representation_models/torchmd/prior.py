@@ -1,8 +1,8 @@
-from abc import abstractmethod, ABCMeta
-import torch
-from torch import nn
-from pytorch_lightning.utilities import rank_zero_warn
+from abc import ABCMeta, abstractmethod
 
+import torch
+from pytorch_lightning.utilities import rank_zero_warn
+from torch import nn
 
 __all__ = ["Atomref"]
 

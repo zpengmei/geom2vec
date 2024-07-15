@@ -1,11 +1,12 @@
-import torch
-import numpy as np
-from typing import List
-from tqdm import tqdm
-from torch_scatter import scatter
 import os
-import MDAnalysis as mda
 from collections import Counter
+from typing import List
+
+import MDAnalysis as mda
+import numpy as np
+import torch
+from torch_scatter import scatter
+from tqdm import tqdm
 
 mass_mapping = {
     "C": 12.011,
@@ -35,9 +36,7 @@ def create_model(
 
     if model_type == "et":
         from geom2vec.representation_models.torchmd.main_model import (
-            get_args,
-            create_model,
-        )
+            create_model, get_args)
 
         args = get_args(
             hidden_channels,
@@ -60,9 +59,7 @@ def create_model(
         )
     elif model_type == "tn":
         from geom2vec.representation_models.torchmd.main_model import (
-            get_args,
-            create_model,
-        )
+            create_model, get_args)
 
         args = get_args(
             hidden_channels,

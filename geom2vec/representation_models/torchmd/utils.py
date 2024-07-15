@@ -1,10 +1,10 @@
 import math
 
 import torch
-from torch import nn
 import torch.nn.functional as F
-from torch_geometric.nn import MessagePassing
+from torch import nn
 from torch_cluster import radius_graph
+from torch_geometric.nn import MessagePassing
 
 
 def visualize_basis(basis_type, num_rbf=50, cutoff_lower=0, cutoff_upper=5):

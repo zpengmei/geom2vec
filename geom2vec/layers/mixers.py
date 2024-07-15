@@ -1,19 +1,21 @@
+import copy
+
 import torch
 import torch.nn as nn
-import copy
 from einops.layers.torch import Rearrange
-from torch.nn import TransformerEncoderLayer, TransformerEncoder
+from torch.nn import TransformerEncoder, TransformerEncoderLayer
 
 
 class CustomTransformerEncoderLayer(TransformerEncoderLayer):
     """Transformer layer on coarsed graph, i.e. residue level (SubFormer)
-    
+
     Args:
         d_model (int): The number of expected features in the input.
         nhead (int): The number of heads in the multiheadattention models.
         dim_feedforward (int): The dimension of the feedforward network model.
         dropout (float): The dropout value.
     """
+
     def __init__(self, *args, **kwargs):
         super(CustomTransformerEncoderLayer, self).__init__(*args, **kwargs)
 
@@ -36,6 +38,7 @@ class CustomTransformerEncoder(nn.Module):
         encoder_layer (nn.Module): An instance of the CustomTransformerEncoderLayer class.
         num_layers (int): The number of sub-encoder-layers in the encoder.
     """
+
     def __init__(self, encoder_layer, num_layers):
         super(CustomTransformerEncoder, self).__init__()
         self.layers = nn.ModuleList(
@@ -71,17 +74,17 @@ class SubFormer(nn.Module):
     """
 
     def __init__(
-            self,
-            hidden_channels,
-            encoder_layers,
-            nhead,
-            dim_feedforward,
-            pool="cls",
-            dropout=0.1,
-            attn_map=True,
-            attn_mask=None,
-            pool_mask=None,
-            device=torch.device("cpu"),
+        self,
+        hidden_channels,
+        encoder_layers,
+        nhead,
+        dim_feedforward,
+        pool="cls",
+        dropout=0.1,
+        attn_map=True,
+        attn_mask=None,
+        pool_mask=None,
+        device=torch.device("cpu"),
     ):
         super(SubFormer, self).__init__()
 
@@ -121,17 +124,24 @@ class SubFormer(nn.Module):
             if attn_mask.dtype == torch.bool:
                 # create the square attention mask, True means masked and not allowed to attend
                 # add a False to the first element of the mask, so that the cls token can attend to all nodes
-                attn_mask = torch.cat([torch.tensor([False]).to(device), attn_mask], dim=0)
+                attn_mask = torch.cat(
+                    [torch.tensor([False]).to(device), attn_mask], dim=0
+                )
                 # seq_len -> (seq_len, seq_len)
                 attn_mask = attn_mask.unsqueeze(0) | attn_mask.unsqueeze(1)
-                attn_mask = attn_mask.float().masked_fill(attn_mask == 0, float(0.0)).masked_fill(attn_mask == 1,
-                                                                                                  float('-inf'))
+                attn_mask = (
+                    attn_mask.float()
+                    .masked_fill(attn_mask == 0, float(0.0))
+                    .masked_fill(attn_mask == 1, float("-inf"))
+                )
 
             elif torch.is_floating_point(attn_mask):
                 # additive weight to the attention score, can bias the attention score
 
                 # add a 0 to the first element of the mask, so that the cls token is not affected by the mask
-                attn_mask = torch.cat([torch.tensor([0.0]).to(device), attn_mask], dim=0)
+                attn_mask = torch.cat(
+                    [torch.tensor([0.0]).to(device), attn_mask], dim=0
+                )
                 attn_mask = attn_mask.unsqueeze(0) + attn_mask.unsqueeze(1)
 
             else:
@@ -141,16 +151,18 @@ class SubFormer(nn.Module):
 
         if pool_mask is not None:
             # add a False to the first element of the mask for the cls token
-            self.pool_mask = torch.cat([torch.tensor([False]).to(device), pool_mask], dim=0)
-            assert self.pool != "cls", "pool_mask is not compatible with cls token pooling"
+            self.pool_mask = torch.cat(
+                [torch.tensor([False]).to(device), pool_mask], dim=0
+            )
+            assert (
+                self.pool != "cls"
+            ), "pool_mask is not compatible with cls token pooling"
 
     def get_weights(self, data):
         src = data
         src = torch.cat((self.cls_token.expand(src.size(0), -1, -1), src), dim=1)
         src, attention_weights = self.transformer_encoder(
-            src,
-            mask=self.attn_mask,
-            src_key_padding_mask=None
+            src, mask=self.attn_mask, src_key_padding_mask=None
         )
         return attention_weights
 
@@ -160,14 +172,12 @@ class SubFormer(nn.Module):
 
         if self.attn_map:
             src, _ = self.transformer_encoder(
-                src,
-                mask=self.attn_mask,
-                src_key_padding_mask=None
+                src, mask=self.attn_mask, src_key_padding_mask=None
             )
         else:
-            src = self.transformer_encoder(src,
-                                           mask=self.attn_mask,
-                                           src_key_padding_mask=None)
+            src = self.transformer_encoder(
+                src, mask=self.attn_mask, src_key_padding_mask=None
+            )
 
         if hasattr(self, "pool_mask"):
             src = src[:, ~self.pool_mask, :]  # remove the masked patches
@@ -258,16 +268,16 @@ class SubMixer(nn.Module):
     """
 
     def __init__(
-            self,
-            num_patch,
-            depth,
-            dropout,
-            dim,
-            token_dim,
-            channel_dim,
-            pool="mean",
-            pool_mask=None,
-            device=torch.device("cpu"),
+        self,
+        num_patch,
+        depth,
+        dropout,
+        dim,
+        token_dim,
+        channel_dim,
+        pool="mean",
+        pool_mask=None,
+        device=torch.device("cpu"),
     ):
         super().__init__()
         self.num_patch = num_patch
@@ -280,25 +290,21 @@ class SubMixer(nn.Module):
         )
         self.pool = pool
         if pool not in ["mean", "sum"]:
-            raise ValueError(
-                f"Pooling should be either 'mean' or 'sum' but got {pool}"
-            )
+            raise ValueError(f"Pooling should be either 'mean' or 'sum' but got {pool}")
 
         if pool_mask is not None:
             assert (
-                    pool_mask.shape[0] == num_patch
+                pool_mask.shape[0] == num_patch
             ), f"Input tensor has {pool_mask.shape[0]} patches, but expected {num_patch}"
 
             # assume pool_mask is a boolean tensor
-            assert (
-                    pool_mask.dtype == torch.bool
-            ), "pool_mask must be a boolean tensor"
+            assert pool_mask.dtype == torch.bool, "pool_mask must be a boolean tensor"
 
             self.pool_mask = pool_mask
 
     def forward(self, x):
         assert (
-                x.shape[1] == self.num_patch
+            x.shape[1] == self.num_patch
         ), f"Input tensor has {x.shape[1]} patches, but expected {self.num_patch}"
         x = self.mixer(x)
 

@@ -1,11 +1,12 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
-from typing import Optional
 from torch import Tensor
 
 from ..layers.equivariant import EquivariantScalar
-from ..layers.mlps import MLP
 from ..layers.mixers import SubFormer, SubMixer
+from ..layers.mlps import MLP
 
 
 class Lobe(nn.Module):
@@ -44,30 +45,31 @@ class Lobe(nn.Module):
         pool_mask: Pool mask for the token mixer or transformer. Defaults to
             None.
     """
+
     def __init__(
-            self,
-            hidden_channels: int,
-            intermediate_channels: int,
-            output_channels: int,
-            num_layers: int,
-            atomic_numbers: torch.Tensor, 
-            representation_model: nn.Module,
-            batch_norm: bool = False,
-            vector_feature: bool = True,
-            mlp_dropout: float = 0.0,
-            mlp_out_activation=Optional[nn.Module],
-            device: torch.device = torch.device("cpu"),
-            token_mixer: str = "none",
-            num_mixer_layers: int = 4,
-            expansion_factor: int = 2,
-            nhead: int = 8,
-            pooling: str = "cls",
-            dropout: float = 0.1,
-            attn_map: bool = False,
-            num_tokens: int = 1,
-            token_dim: int = 64,
-            attn_mask: Tensor = None,
-            pool_mask: Tensor = None,
+        self,
+        hidden_channels: int,
+        intermediate_channels: int,
+        output_channels: int,
+        num_layers: int,
+        atomic_numbers: torch.Tensor,
+        representation_model: nn.Module,
+        batch_norm: bool = False,
+        vector_feature: bool = True,
+        mlp_dropout: float = 0.0,
+        mlp_out_activation=Optional[nn.Module],
+        device: torch.device = torch.device("cpu"),
+        token_mixer: str = "none",
+        num_mixer_layers: int = 4,
+        expansion_factor: int = 2,
+        nhead: int = 8,
+        pooling: str = "cls",
+        dropout: float = 0.1,
+        attn_map: bool = False,
+        num_tokens: int = 1,
+        token_dim: int = 64,
+        attn_mask: Tensor = None,
+        pool_mask: Tensor = None,
     ):
         super(Lobe, self).__init__()
 
@@ -144,7 +146,6 @@ class Lobe(nn.Module):
         self.to(device)
 
     def forward(self, data: torch.Tensor) -> torch.Tensor:
-
         # now the input for the on the fly model is the atomic positions (batch, num_atoms, 3)
 
         n_samples, n_atoms, _ = data.shape

@@ -1,7 +1,9 @@
 from typing import Optional
+
 import torch
-from torch import Tensor
 import torch.nn as nn
+from torch import Tensor
+
 
 class MLP(nn.Module):
     r"""A multi-layer perceptron (MLP) with SiLU activation functions.

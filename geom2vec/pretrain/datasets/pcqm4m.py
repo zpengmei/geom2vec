@@ -1,11 +1,12 @@
-import torch
-import numpy as np
-from torch_geometric.data import InMemoryDataset, Data, download_url
-from tqdm import tqdm
-import os
 import glob
+import os
+from typing import Callable, List, Optional
+
 import ase
-from typing import Optional, Callable, List
+import numpy as np
+import torch
+from torch_geometric.data import Data, InMemoryDataset, download_url
+from tqdm import tqdm
 
 
 class PCQM4MV2_XYZ(InMemoryDataset):
