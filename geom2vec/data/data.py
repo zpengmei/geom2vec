@@ -25,7 +25,7 @@ class Preprocessing:
 
     def _seq_trajs(self, data):
         if self._torch_or_numpy == "numpy":
-            data = data.copy()
+            # data = data.copy()
             if not isinstance(data, list):
                 data = [data]
             for i in range(len(data)):
