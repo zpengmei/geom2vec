@@ -1,14 +1,14 @@
 import re
+import warnings
+import argparse
 from typing import Optional, Tuple
+
 import torch
 from torch import nn
-from .output_modules import EquivariantScalar
+
 from .et import TorchMD_ET
 from .tensornet import TensorNet
-import warnings
-
-
-import argparse
+from ...layers.equivariant import EquivariantScalar
 
 
 def get_args(hidden_channels, num_layers, num_rbf, num_heads, cutoff=5.0,rep_model='et'):

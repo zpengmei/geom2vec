@@ -1,16 +1,23 @@
 import torch
 import torch.nn as nn
 import copy
-from einops.layers.torch import Rearrange, Reduce
+from einops.layers.torch import Rearrange
 from torch.nn import TransformerEncoderLayer, TransformerEncoder
 
 
-### Transformer on coarsed graph, i.e. residue level (SubFormer)
 class CustomTransformerEncoderLayer(TransformerEncoderLayer):
+    """Transformer layer on coarsed graph, i.e. residue level (SubFormer)
+    
+    Args:
+        d_model (int): The number of expected features in the input.
+        nhead (int): The number of heads in the multiheadattention models.
+        dim_feedforward (int): The dimension of the feedforward network model.
+        dropout (float): The dropout value.
+    """
     def __init__(self, *args, **kwargs):
         super(CustomTransformerEncoderLayer, self).__init__(*args, **kwargs)
 
-    def forward(self, src, src_mask=None, src_key_padding_mask=None):
+    def forward(self, src: torch.Tensor, src_mask=None, src_key_padding_mask=None):
         src2, attn_weights = self.self_attn(
             src, src, src, attn_mask=src_mask, key_padding_mask=src_key_padding_mask
         )
@@ -23,6 +30,12 @@ class CustomTransformerEncoderLayer(TransformerEncoderLayer):
 
 
 class CustomTransformerEncoder(nn.Module):
+    """Transformer encoder on coarsed graph, i.e. residue level (SubFormer)
+
+    Args:
+        encoder_layer (nn.Module): An instance of the CustomTransformerEncoderLayer class.
+        num_layers (int): The number of sub-encoder-layers in the encoder.
+    """
     def __init__(self, encoder_layer, num_layers):
         super(CustomTransformerEncoder, self).__init__()
         self.layers = nn.ModuleList(

@@ -1,8 +1,10 @@
 from abc import abstractmethod, ABCMeta
 from typing import Optional
-from .utils import act_class_mapping, GatedEquivariantBlock
+
 import torch
 from torch import nn
+
+from .utils import act_class_mapping, GatedEquivariantBlock
 
 
 class OutputModel(nn.Module, metaclass=ABCMeta):
@@ -69,14 +71,3 @@ class EquivariantScalar(OutputModel):
             x, v = layer(x, v)
         # include v in output to make sure all parameters have a gradient
         return x + v.sum() * 0, v
-
-# class EquivariantVectorOutput(EquivariantScalar):
-#     def __init__(self, hidden_channels, activation="silu"):
-#         super(EquivariantVectorOutput, self).__init__(
-#             hidden_channels, activation, allow_prior_model=False
-#         )
-#
-#     def pre_reduce(self, x, v, z, pos, batch):
-#         for layer in self.output_network:
-#             x, v = layer(x, v)
-#         return v.squeeze()

@@ -1,41 +1,73 @@
 import torch
 import torch.nn as nn
-from geom2vec.layers.mlps import EquivariantScalar, MLP
-from geom2vec.layers.mixers import SubFormer, SubMixer
 from typing import Optional
 from torch import Tensor
 
+from ..layers.equivariant import EquivariantScalar
+from ..layers.mlps import MLP
+from ..layers.mixers import SubFormer, SubMixer
 
-class Lobe(torch.nn.Module):
+
+class Lobe(nn.Module):
+    """
+    Initialize the Lobe model for geom2vec for on-the-fly representation learning.
+
+    Args:
+        hidden_channels: Number of input channels.
+        intermediate_channels: Number of intermediate channels.
+        output_channels: Number of output channels.
+        num_layers: Number of layers in the MLP.
+        atomic_numbers: Atomic numbers of the atoms.
+        representation_model: Representation model.
+        batch_norm: Whether to use batch normalization. Defaults to False.
+        vector_feature: Whether the input features are vector features
+         Defaults to True.
+        mlp_dropout: Dropout probability for the MLP layers. Defaults to 0.0.
+        mlp_out_activation: Activation function for the output layer of the MLP.
+            Defaults to None.
+        device: Device to use for computation. Defaults to torch.device("cpu").
+        token_mixer: Type of token mixer to use. Can be "none", "subformer", or
+            "submixer". Defaults to "none".
+        num_mixer_layers: Number of layers for the token mixer. Defaults to 4.
+        expansion_factor: Expansion factor for the transformer feed-forward
+            layers. Defaults to 2.
+        nhead: Number of attention heads for the transformer. Defaults to 8.
+        pooling: Pooling strategy. Can be "cls", "mean", or "sum". Defaults
+            to "cls".
+        dropout: Dropout probability for the token mixer and transformer.
+            Defaults to 0.1.
+        attn_map: Whether to return the attention map of the transformer.
+            Defaults to False.
+        num_tokens: Number of tokens for the token mixer. Defaults to 1.
+        token_dim: Dimension of tokens for the token mixer. Defaults to 64.
+        attn_mask: Attention mask for the transformer. Defaults to None.
+        pool_mask: Pool mask for the token mixer or transformer. Defaults to
+            None.
+    """
     def __init__(
             self,
-            # general parameters
             hidden_channels: int,
             intermediate_channels: int,
             output_channels: int,
             num_layers: int,
-            atomic_numbers: torch.Tensor,  # atomic numbers of the atoms
-            representation_model: nn.Module,  # representation model
+            atomic_numbers: torch.Tensor, 
+            representation_model: nn.Module,
             batch_norm: bool = False,
             vector_feature: bool = True,
             mlp_dropout: float = 0.0,
             mlp_out_activation=Optional[nn.Module],
             device: torch.device = torch.device("cpu"),
-            # mixer parameters
-            token_mixer: str = "none",  # None, subformer, submixer
-            num_mixer_layers: int = 4,  # number of layers for transformer or mlp-mixer
-            expansion_factor: int = 2,  # expansion factor for transformer FF
-            nhead: int = 8,  # number of heads for transformer
-            pooling: str = "cls",  # cls, mean, sum
-            dropout: float = 0.1,  # dropout for mlp-mixer and transformer
-            attn_map: bool = False,  # whether to return attention map of transformer
-            # suppose user input is (seq_len) true/false mask, True means masked and not to be pooled
-            num_tokens: int = 1,  # number of tokens for mlp-mixer
-            token_dim: int = 64,  # dimension of tokens for mlpixer
-            #### make sure you know what you are doing when using masks ####
-            attn_mask: Tensor = None,  # attention mask for transformer (optional)
-            pool_mask: Tensor = None,  # pool mask for transformer/MLP-mixer (optional)
-            #################################################################
+            token_mixer: str = "none",
+            num_mixer_layers: int = 4,
+            expansion_factor: int = 2,
+            nhead: int = 8,
+            pooling: str = "cls",
+            dropout: float = 0.1,
+            attn_map: bool = False,
+            num_tokens: int = 1,
+            token_dim: int = 64,
+            attn_mask: Tensor = None,
+            pool_mask: Tensor = None,
     ):
         super(Lobe, self).__init__()
 
@@ -111,7 +143,7 @@ class Lobe(torch.nn.Module):
 
         self.to(device)
 
-    def forward(self, data):
+    def forward(self, data: torch.Tensor) -> torch.Tensor:
 
         # now the input for the on the fly model is the atomic positions (batch, num_atoms, 3)
 

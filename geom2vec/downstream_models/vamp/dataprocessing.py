@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from .utils import rao_blackwell_ledoit_wolf
-from geom2vec.data.data import Preprocessing
+from ...data.data import Preprocessing
 
 
 class Postprocessing_vac(Preprocessing):

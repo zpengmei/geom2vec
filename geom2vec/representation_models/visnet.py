@@ -9,6 +9,8 @@ from torch.nn import Embedding, LayerNorm, Linear, Parameter
 from torch_geometric.nn import MessagePassing, radius_graph
 from torch_geometric.utils import scatter
 
+from ..layers.equivariant import EquivariantVec
+
 
 class CosineCutoff(torch.nn.Module):
     r"""Appies a cosine cutoff to the input distances.
@@ -1005,54 +1007,6 @@ class EquivariantScalar(torch.nn.Module):
         return x + v.sum() * 0, v
 
 
-class EquivariantVec(torch.nn.Module):
-    r"""Computes final scalar outputs based on node features and vector
-    features.
-
-    Args:
-        hidden_channels (int): The number of hidden channels in the node
-            embeddings.
-    """
-
-    def __init__(self, hidden_channels: int) -> None:
-        super().__init__()
-
-        self.output_network = torch.nn.ModuleList([
-            GatedEquivariantBlock(
-                hidden_channels,
-                hidden_channels // 2,
-                scalar_activation=True,
-            ),
-            GatedEquivariantBlock(
-                hidden_channels // 2,
-                1,
-                scalar_activation=False,
-            ),
-        ])
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        r"""Resets the parameters of the module."""
-        for layer in self.output_network:
-            layer.reset_parameters()
-
-    def pre_reduce(self, x: Tensor, v: Tensor) -> Tensor:
-        r"""Computes the final scalar outputs.
-
-        Args:
-            x (torch.Tensor): The scalar features of the nodes.
-            v (torch.Tensor): The vector features of the nodes.
-
-        Returns:
-            out (torch.Tensor): The final scalar outputs of the nodes.
-        """
-        for layer in self.output_network:
-            x, v = layer(x, v)
-
-        return x + v.sum() * 0, v.squeeze(-1)
-
-
 class Atomref(torch.nn.Module):
     r"""Adds atom reference values to atomic energies.
 
@@ -1178,7 +1132,6 @@ class ViSNet(torch.nn.Module):
             vertex=vertex,
         )
 
-        # self.output_model = EquivariantScalar(hidden_channels=hidden_channels, out_channels=hidden_channels)
         self.vec_out = EquivariantVec(hidden_channels=hidden_channels)
         self.prior_model = Atomref(atomref=atomref, max_z=max_z)
         self.reduce_op = reduce_op
