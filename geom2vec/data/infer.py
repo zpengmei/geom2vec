@@ -165,7 +165,7 @@ def infer_traj(
                 atom_rep = torch.cat([x_rep, v_rep], dim=-2)
 
                 if atom_mask is not None:
-                    atom_rep = atom_rep[:, atom_mask:, :]
+                    atom_rep = atom_rep[:, atom_mask, :]
 
                 if cg_mapping is not None:
                     cg_rep = scatter(atom_rep, cg_map, dim=1, reduce="add")
