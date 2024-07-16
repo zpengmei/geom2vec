@@ -210,7 +210,7 @@ class Preprocessing:
 
         return dataset
 
-    def load_dataset(self, data_path, mmap_mode="r", data_key="arr_0", to_torch=True):
+    def load_dataset(self, data_path, mmap_mode="r", data_key="arr_0", to_torch=True, sum_token=False):
         """Load the dataset from the file.
 
         Parameters
@@ -241,27 +241,31 @@ class Preprocessing:
         data = []
         for file in tqdm(files):
             if self._torch_or_numpy == "torch":
-                data.append(
-                    torch.load(file, map_location="cpu", mmap=mmap_mode).to(self._dtype)
-                )
+                traj = torch.load(file, map_location="cpu", mmap=mmap_mode).to(self._dtype)
+                if sum_token:
+                    traj = traj.sum(-3)
+                data.append(traj)
+
             else:
                 if to_torch:
-                    data.append(
-                        torch.tensor(
-                            np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
-                        ).squeeze()
-                    )
+                    traj = np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
+                    traj = torch.tensor(traj).squeeze()
+                    if sum_token:
+                        traj = traj.sum(-3)
+                    data.append(traj)
+
                 else:
-                    data.append(
-                        np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
-                    )
+                    traj = np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
+                    if sum_token:
+                        traj = traj.sum(-3)
+                    data.append(traj)
 
         if to_torch:
             self._torch_or_numpy = "torch"
 
         return data
 
-    def load_dataset_folder(self, data_path, mmap_mode="r", data_key="arr_0", to_torch=True):
+    def load_dataset_folder(self, data_path, mmap_mode="r", data_key="arr_0", to_torch=True, sum_token=False):
         """Load the dataset from the file.
 
         Parameters
@@ -291,20 +295,24 @@ class Preprocessing:
         data = []
         for file in tqdm(files):
             if self._torch_or_numpy == "torch":
-                data.append(
-                    torch.load(file, map_location="cpu", mmap=mmap_mode).to(self._dtype)
-                )
+                traj = torch.load(file, map_location="cpu", mmap=mmap_mode).to(self._dtype)
+                if sum_token:
+                    traj = traj.sum(-3)
+                data.append(traj)
+
             else:
                 if to_torch:
-                    data.append(
-                        torch.tensor(
-                            np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
-                        ).squeeze()
-                    )
+                    traj = np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
+                    traj = torch.tensor(traj).squeeze()
+                    if sum_token:
+                        traj = traj.sum(-3)
+                    data.append(traj)
+
                 else:
-                    data.append(
-                        np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
-                    )
+                    traj = np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
+                    if sum_token:
+                        traj = traj.sum(-3)
+                    data.append(traj)
 
         if to_torch:
             self._torch_or_numpy = "torch"
