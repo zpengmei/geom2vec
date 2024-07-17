@@ -46,7 +46,7 @@ if args.system == 'trpcage':
     output_channels = 5
     topology_file = "/project/dinner/anton_data/TRP_cage/trpcage.pdb"
     trajectory_files = [f"/project/dinner/anton_data/TRP_cage/DESRES-Trajectory_2JOF-0-protein/2JOF-0-protein/2JOF-0-protein-{i:03d}.dcd" for i in range(0, 105)]
-
+    trajectory_file = trajectory_files[0]
     traj = md.load(trajectory_files[0], top=topology_file)
     for traj_file in tqdm(trajectory_files[1:]):
         traj = md.join([traj, md.load(traj_file, top=topology_file)])
@@ -86,7 +86,7 @@ elif args.system == 'villin':
 atom_types = [atom.element.symbol for atom in traj.top.atoms]
 mask = [atom != 'H' for atom in atom_types]
 xyz = torch.tensor(traj.xyz).reshape(-1, num_atoms, 3)
-xyz = xyz[:,mask,:]
+xyz = xyz[:,mask,:] * 10  # Convert to angstroms
 if args.system != 'chignolin':
     xyz = xyz[::2]
 
