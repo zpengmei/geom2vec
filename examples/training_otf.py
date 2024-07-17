@@ -94,12 +94,9 @@ preprocess = Preprocessing(torch_or_numpy='torch')
 time_lagged_dataset = preprocess.create_time_lagged_dataset(xyz.to(torch.float32), lag_time=lag_time)
 
 # Split the dataset into training and validation sets
-train_data_unsplit, val_data = torch.utils.data.random_split(
-    time_lagged_dataset, [int(0.5 * len(time_lagged_dataset)), len(time_lagged_dataset) - int(0.5 * len(time_lagged_dataset))]
-)
-
-train_data, _ = torch.utils.data.random_split(
-    train_data_unsplit, [int(args.training_fraction * len(train_data_unsplit)), len(train_data_unsplit) - int(args.training_fraction * len(train_data_unsplit))]
+training_fraction = args.training_fraction
+train_data, val_data = torch.utils.data.random_split(
+    time_lagged_dataset, [int(training_fraction * len(time_lagged_dataset)), len(time_lagged_dataset) - int(training_fraction * len(time_lagged_dataset))]
 )
 
 print('train_data:', len(train_data))
