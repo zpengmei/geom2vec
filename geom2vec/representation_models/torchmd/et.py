@@ -131,7 +131,7 @@ class TorchMD_ET(nn.Module):
                 attn_activation,
                 cutoff_lower,
                 cutoff_upper,
-            ).jittable()
+            )
             self.attention_layers.append(layer)
 
         self.out_norm = nn.LayerNorm(hidden_channels)
