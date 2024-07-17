@@ -9,6 +9,57 @@ from ..layers.mixers import SubFormer, SubMixer
 from ..layers.mlps import MLP
 
 
+class OTFLobe(nn.Module):
+
+    def __init__(self,
+                 input_dim,
+                 output_dim,
+                 hidden_channels=128,
+                 vector_features=True,
+                 representation_model=None,
+                 atomic_numbers=None
+                 ):
+        super(OTFLobe, self).__init__()
+
+        self.atom_projection = EquivariantScalar(input_dim, hidden_channels)
+
+        if not vector_features:
+            self.atom_projection = nn.Linear(input_dim, hidden_channels)
+
+        self.vector_features = vector_features
+
+        self.graph_projection = nn.Sequential(
+            nn.Linear(hidden_channels, hidden_channels),
+            nn.SiLU(),
+            nn.Linear(hidden_channels, output_dim)
+        )
+
+        self.activation = nn.SiLU()
+        self.representation_model = representation_model
+        self.z = torch.from_numpy(atomic_numbers)
+
+    def forward(self, data):
+        # suppose the input shape is (bz,atoms,3)
+        n_samples, n_atoms, _ = data.shape
+        z_batch = self.z.expand(n_samples, -1).reshape(-1).to(data.device)
+        batch_batch = (
+            torch.arange(n_samples).unsqueeze(1).expand(-1, n_atoms).reshape(-1)
+        ).to(data.device)
+        x_rep, v_rep, _ = self.representation_model(z=z_batch,
+                                                    pos=data.reshape(-1, 3).contiguous().to(data.device),
+                                                    batch=batch_batch)
+        x_rep = x_rep.reshape(n_samples, n_atoms, -1).sum(dim=1)
+        v_rep = v_rep.reshape(n_samples, n_atoms, 3, -1).sum(dim=1)
+
+        if not self.vector_features:
+            x_rep = self.atom_projection(x_rep)
+        else:
+            x_rep, _ = self.atom_projection.pre_reduce(x=x_rep, v=v_rep)
+        out = self.graph_projection(x_rep)
+
+        return out
+
+
 class Lobe(nn.Module):
     """
     Initialize the Lobe model for geom2vec for on-the-fly representation learning.
@@ -47,29 +98,29 @@ class Lobe(nn.Module):
     """
 
     def __init__(
-        self,
-        hidden_channels: int,
-        intermediate_channels: int,
-        output_channels: int,
-        num_layers: int,
-        atomic_numbers: torch.Tensor,
-        representation_model: nn.Module,
-        batch_norm: bool = False,
-        vector_feature: bool = True,
-        mlp_dropout: float = 0.0,
-        mlp_out_activation=Optional[nn.Module],
-        device: torch.device = torch.device("cpu"),
-        token_mixer: str = "none",
-        num_mixer_layers: int = 4,
-        expansion_factor: int = 2,
-        nhead: int = 8,
-        pooling: str = "cls",
-        dropout: float = 0.1,
-        attn_map: bool = False,
-        num_tokens: int = 1,
-        token_dim: int = 64,
-        attn_mask: Tensor = None,
-        pool_mask: Tensor = None,
+            self,
+            hidden_channels: int,
+            intermediate_channels: int,
+            output_channels: int,
+            num_layers: int,
+            atomic_numbers: torch.Tensor,
+            representation_model: nn.Module,
+            batch_norm: bool = False,
+            vector_feature: bool = True,
+            mlp_dropout: float = 0.0,
+            mlp_out_activation=Optional[nn.Module],
+            device: torch.device = torch.device("cpu"),
+            token_mixer: str = "none",
+            num_mixer_layers: int = 4,
+            expansion_factor: int = 2,
+            nhead: int = 8,
+            pooling: str = "cls",
+            dropout: float = 0.1,
+            attn_map: bool = False,
+            num_tokens: int = 1,
+            token_dim: int = 64,
+            attn_mask: Tensor = None,
+            pool_mask: Tensor = None,
     ):
         super(Lobe, self).__init__()
 
