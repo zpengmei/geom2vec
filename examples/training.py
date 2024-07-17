@@ -50,7 +50,7 @@ torch.backends.cudnn.benchmark = False
 
 # Load and preprocess dataset
 folder_paths = {
-    'trpcage': '/project/dinner/zpengmei/prots/trpcage/features_256/vis_vs',
+    'trpcage': f'/project/dinner/zpengmei/prots/trpcage/features_{args.hidden_channels}/vis_vs',
     'chignolin': '/project/dinner/zpengmei/prots/chignolin/features/vis_vs',
     'villin': '/project/dinner/zpengmei/prots/villin/features_516'
 }
