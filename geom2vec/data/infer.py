@@ -319,7 +319,7 @@ def extract_mdtraj_info(md_traj_object, exclude_hydrogens=True):
     atomic_numbers = np.array(atomic_numbers)
     residue_indices = [atom.residue.index for atom in md_traj_object.top.atoms]
     residue_indices = np.array(residue_indices)
-    positions = md_traj_object.xyz
+    positions = md_traj_object.xyz * 10 # Convert to angstroms
 
     hydrogen_mask = np.array(atomic_numbers) == 1
 
