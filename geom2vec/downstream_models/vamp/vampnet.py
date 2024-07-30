@@ -109,7 +109,7 @@ class VAMPNet_Model:
         return self._lobe_lagged
 
     def transform(
-        self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
+            self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
     ):
         """Transform the data through the trained networks.
 
@@ -136,14 +136,14 @@ class VAMPNet_Model:
 
         output = []
         for data_tensor in map_data_to_tensor(
-            data, device=self._device, dtype=self._dtype
+                data, device=self._device, dtype=self._dtype
         ):
             # revise to batching for large data
             # batching first
             batch_list = []
             batch_size = batch_size
             for i in tqdm(range(0, data_tensor.shape[0], batch_size)):
-                data = data_tensor[i : i + batch_size]
+                data = data_tensor[i: i + batch_size]
                 data = data.to(device=self._device)
                 batch_list.append(net(data).detach().cpu().numpy())
             output.append(np.concatenate(batch_list, axis=0))
@@ -189,19 +189,19 @@ class VAMPNet:
     """
 
     def __init__(
-        self,
-        lobe,
-        lobe_lagged=None,
-        optimizer="Adam",
-        device=None,
-        learning_rate=5e-4,
-        epsilon=1e-6,
-        weight_decay=0,
-        grad_accum_steps=1,
-        mode="regularize",
-        symmetrized=False,
-        dtype=np.float32,
-        save_model_interval=None,
+            self,
+            lobe,
+            lobe_lagged=None,
+            optimizer="Adam",
+            device=None,
+            learning_rate=5e-4,
+            epsilon=1e-6,
+            weight_decay=0,
+            grad_accum_steps=1,
+            mode="regularize",
+            symmetrized=False,
+            dtype=np.float32,
+            save_model_interval=None,
     ):
         self._lobe = lobe
         self._lobe_lagged = lobe_lagged
@@ -256,8 +256,6 @@ class VAMPNet:
             epsilon=self._epsilon, mode=self._mode, symmetrized=self._symmetrized
         )
 
-        self._last_train_loss = None
-
     @property
     def training_scores(self):
         return np.array(self._training_scores)
@@ -286,42 +284,37 @@ class VAMPNet:
         if self._lobe_lagged is not None:
             self._lobe_lagged.train()
 
-        # Zero gradients and initialize accumulators only at the beginning of an accumulation cycle
-        if self._step % grad_accum_steps == 0:
-            self._optimizer.zero_grad()
-            self._x_0_accum = []
-            self._x_1_accum = []
+        self._optimizer.zero_grad()
+        x_0_accum = []
+        x_1_accum = []
 
-        x_0 = self._lobe(batch_0)
-        if self._lobe_lagged is None:
-            x_1 = self._lobe(batch_1)
-        else:
-            x_1 = self._lobe_lagged(batch_1)
+        # split the data into batches in terms of grad_accum_steps
+        batch_0_batches = torch.split(batch_0, batch_0.shape[0] // grad_accum_steps)
+        batch_1_batches = torch.split(batch_1, batch_1.shape[0] // grad_accum_steps)
 
-        # Accumulate the outputs
-        self._x_0_accum.append(x_0)
-        self._x_1_accum.append(x_1)
+        for batch_0, batch_1 in zip(batch_0_batches, batch_1_batches):
+            x_0 = self._lobe(batch_0)
+            if self._lobe_lagged is None:
+                x_1 = self._lobe(batch_1)
+            else:
+                x_1 = self._lobe_lagged(batch_1)
 
-        if (self._step + 1) % grad_accum_steps == 0:
-            # Concatenate accumulated outputs
-            accumulated_x_0 = torch.cat(self._x_0_accum, dim=0)
-            accumulated_x_1 = torch.cat(self._x_1_accum, dim=0)
+            # Accumulate the outputs
+            x_0_accum.append(x_0.clone().detach().requires_grad_(True))
+            x_1_accum.append(x_1.clone().detach().requires_grad_(True))
 
-            loss = self._estimator.fit([accumulated_x_0, accumulated_x_1]).loss
+        # Concatenate accumulated outputs
+        accumulated_x_0 = torch.cat(x_0_accum, dim=0)
+        accumulated_x_1 = torch.cat(x_1_accum, dim=0)
 
-            # Accumulate gradients
-            loss.backward()
+        loss = self._estimator.fit([accumulated_x_0, accumulated_x_1]).loss
+        loss.backward()
 
-            # Step the optimizer only after 'grad_accum_steps' calls to partial_fit
-            self._optimizer.step()
-            self._training_scores.append((-loss).item())
-            self._last_train_loss = loss  # Update the last valid loss
-        else:
-            loss = None
-
+        self._optimizer.step()
+        self._training_scores.append((-loss).item())
         self._step += 1
 
-        return self, self._last_train_loss   # Return the last valid loss
+        return self, loss
 
     def validate(self, val_data):
         """Evaluates the currently set lobe(s) on validation data and returns the value of the configured score.
@@ -335,43 +328,42 @@ class VAMPNet:
         score : torch.Tensor
             The value of the score.
         """
+
         val_batch_0, val_batch_1 = val_data[0], val_data[1]
 
         self._lobe.eval()
-        if self._lobe_lagged is not None:
-            self._lobe_lagged.eval()
 
-        val_x_0_accum = []
-        val_x_1_accum = []
+        # split the data into batches in terms of grad_accum_steps
+        val_batch_0_batches = torch.split(val_batch_0, val_batch_0.shape[0] // self._grad_accum_steps)
+        val_batch_1_batches = torch.split(val_batch_1, val_batch_1.shape[0] // self._grad_accum_steps)
 
-        with torch.no_grad():
-            val_output_0 = self._lobe(val_batch_0)
-            if self._lobe_lagged is None:
+        val_output_0_accum = []
+        val_output_1_accum = []
+        for val_batch_0, val_batch_1 in zip(val_batch_0_batches, val_batch_1_batches):
+            with torch.no_grad():
+                val_output_0 = self._lobe(val_batch_0)
                 val_output_1 = self._lobe(val_batch_1)
-            else:
-                val_output_1 = self._lobe_lagged(val_batch_1)
 
-            val_x_0_accum.append(val_output_0)
-            val_x_1_accum.append(val_output_1)
+                val_output_0_accum.append(val_output_0.clone().detach().requires_grad_(True))
+                val_output_1_accum.append(val_output_1.clone().detach().requires_grad_(True))
 
-        # Concatenate accumulated validation outputs
-        accumulated_val_x_0 = torch.cat(val_x_0_accum, dim=0)
-        accumulated_val_x_1 = torch.cat(val_x_1_accum, dim=0)
+        val_output_0 = torch.cat(val_output_0_accum, dim=0)
+        val_output_1 = torch.cat(val_output_1_accum, dim=0)
 
-        score = self._estimator.fit([accumulated_val_x_0, accumulated_val_x_1]).score
+        score = self._estimator.fit([val_output_0, val_output_1]).score
         self._estimator.save()
 
         return score
 
     def fit(
-        self,
-        train_loader,
-        n_epochs=1,
-        validation_loader=None,
-        progress=tqdm,
-        train_patience=1000,
-        valid_patience=1000,
-        train_valid_interval=1000,
+            self,
+            train_loader,
+            n_epochs=1,
+            validation_loader=None,
+            progress=tqdm,
+            train_patience=1000,
+            valid_patience=1000,
+            train_valid_interval=1000,
     ):
         """Performs fit on data.
 
@@ -402,7 +394,7 @@ class VAMPNet:
             best_lobe_lagged_state = self._lobe_lagged.state_dict()
 
         for epoch in progress(
-            range(n_epochs), desc="epoch", total=n_epochs, leave=False
+                range(n_epochs), desc="epoch", total=n_epochs, leave=False
         ):
             for batch_0, batch_1 in tqdm(train_loader):
                 step_counter += 1
@@ -424,8 +416,8 @@ class VAMPNet:
                         return self
 
                 if (
-                    validation_loader is not None
-                    and step_counter % train_valid_interval == 0
+                        validation_loader is not None
+                        and step_counter % train_valid_interval == 0
                 ):
                     with torch.no_grad():
                         for val_batch_0, val_batch_1 in validation_loader:
@@ -474,7 +466,7 @@ class VAMPNet:
         return self
 
     def transform(
-        self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
+            self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
     ):
         """Transform the data through the trained networks.
 
@@ -531,3 +523,4 @@ class VAMPNet:
             torch.save(self._lobe_lagged.state_dict(), os.path.join(path, name_lagged))
 
         return self._lobe, self._lobe_lagged
+
