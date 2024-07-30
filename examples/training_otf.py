@@ -25,10 +25,9 @@ parser.add_argument('--vector_feature', action='store_true', help='Whether to us
 parser.add_argument('--mlp_dropout', type=float, default=0.2, help='Dropout for MLP')
 parser.add_argument('--mlp_out_activation', type=str, default=None, help='Output activation for MLP')
 parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning rate for training')
-parser.add_argument('--grad_accum_steps', type=int, default=4, help='Number of gradient accumulation steps')
 parser.add_argument('--optimizer', type=str, default='Adam', help='Optimizer to use for training')
 parser.add_argument('--train_patience', type=int, default=1000, help='Patience for training')
-parser.add_argument('--train_valid_interval', type=int, default=100, help='Interval between training and validation')
+parser.add_argument('--train_valid_interval', type=int, default=1000, help='Interval between training and validation')
 parser.add_argument('--valid_patience', type=int, default=10, help='Patience for validation')
 parser.add_argument('--n_epochs', type=int, default=50, help='Number of epochs to train for')
 args = parser.parse_args()
@@ -127,7 +126,7 @@ rep_model = create_model(
     model_type='vis',
     cutoff=5,
     hidden_channels=16,
-    num_layers=6,
+    num_layers=3,
     num_rbf=16,
     device=device
 )
@@ -154,7 +153,6 @@ net = Lobe(
 model = VAMPNet(
     lobe=net,
     learning_rate=args.learning_rate,
-    grad_accum_steps=args.grad_accum_steps,
     optimizer=args.optimizer,
     device=device
 )
@@ -167,7 +165,7 @@ model.fit(
     validation_loader=val_loader,
     progress=tqdm,
     train_patience=args.train_patience,
-    train_valid_interval=args.train_valid_interval * args.grad_accum_steps,
+    train_valid_interval=args.train_valid_interval,
     valid_patience=args.valid_patience
 )
 end = time.time()

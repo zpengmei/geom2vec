@@ -34,7 +34,6 @@ parser.add_argument('--num_tokens', type=int, default=10, help='Number of tokens
 parser.add_argument('--token_dim', type=int, default=64, help='Token dimension for submixer')
 parser.add_argument('--attn_map', action='store_true', help='Whether to use attention map', default=True)
 parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning rate for training')
-parser.add_argument('--grad_accum_steps', type=int, default=1, help='Number of gradient accumulation steps')
 parser.add_argument('--optimizer', type=str, default='Adam', help='Optimizer to use for training')
 parser.add_argument('--train_patience', type=int, default=1000, help='Patience for training')
 parser.add_argument('--train_valid_interval', type=int, default=100, help='Interval between training and validation')
@@ -141,7 +140,6 @@ else:
 model = VAMPNet(
     lobe=net,
     learning_rate=args.learning_rate,
-    grad_accum_steps=args.grad_accum_steps,
     optimizer=args.optimizer,
     device=device
 )

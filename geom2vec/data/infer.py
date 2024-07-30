@@ -9,6 +9,9 @@ import torch
 from torch_scatter import scatter
 from tqdm import tqdm
 
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 mass_mapping = {
     "C": 12.011,
     "N": 14.007,

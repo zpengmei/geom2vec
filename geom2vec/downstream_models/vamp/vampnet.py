@@ -197,7 +197,6 @@ class VAMPNet:
             learning_rate=5e-4,
             epsilon=1e-6,
             weight_decay=0,
-            grad_accum_steps=1,
             mode="regularize",
             symmetrized=False,
             dtype=np.float32,
@@ -212,7 +211,6 @@ class VAMPNet:
         self._symmetrized = symmetrized
         self._dtype = dtype
         self._save_model_interval = save_model_interval
-        self._grad_accum_steps = grad_accum_steps
 
         if self._dtype == np.float32:
             self._lobe = self._lobe.float()
@@ -276,7 +274,6 @@ class VAMPNet:
         -------
         self : VAMPNet
         """
-        grad_accum_steps = self._grad_accum_steps
 
         batch_0, batch_1 = data[0], data[1]
 
@@ -285,29 +282,15 @@ class VAMPNet:
             self._lobe_lagged.train()
 
         self._optimizer.zero_grad()
-        x_0_accum = []
-        x_1_accum = []
 
-        # split the data into batches in terms of grad_accum_steps
-        batch_0_batches = torch.split(batch_0, batch_0.shape[0] // grad_accum_steps)
-        batch_1_batches = torch.split(batch_1, batch_1.shape[0] // grad_accum_steps)
+        x_0 = self._lobe(batch_0)
+        if self._lobe_lagged is None:
+            x_1 = self._lobe(batch_1)
+        else:
+            x_1 = self._lobe_lagged(batch_1)
 
-        for batch_0, batch_1 in zip(batch_0_batches, batch_1_batches):
-            x_0 = self._lobe(batch_0)
-            if self._lobe_lagged is None:
-                x_1 = self._lobe(batch_1)
-            else:
-                x_1 = self._lobe_lagged(batch_1)
-
-            # Accumulate the outputs
-            x_0_accum.append(x_0.clone().detach().requires_grad_(True))
-            x_1_accum.append(x_1.clone().detach().requires_grad_(True))
-
-        # Concatenate accumulated outputs
-        accumulated_x_0 = torch.cat(x_0_accum, dim=0)
-        accumulated_x_1 = torch.cat(x_1_accum, dim=0)
-
-        loss = self._estimator.fit([accumulated_x_0, accumulated_x_1]).loss
+        loss = self._estimator.fit([x_0, x_1]).loss
+        print('loss', loss)
         loss.backward()
 
         self._optimizer.step()
@@ -333,25 +316,12 @@ class VAMPNet:
 
         self._lobe.eval()
 
-        # split the data into batches in terms of grad_accum_steps
-        val_batch_0_batches = torch.split(val_batch_0, val_batch_0.shape[0] // self._grad_accum_steps)
-        val_batch_1_batches = torch.split(val_batch_1, val_batch_1.shape[0] // self._grad_accum_steps)
+        with torch.no_grad():
+            val_output_0 = self._lobe(val_batch_0)
+            val_output_1 = self._lobe(val_batch_1)
 
-        val_output_0_accum = []
-        val_output_1_accum = []
-        for val_batch_0, val_batch_1 in zip(val_batch_0_batches, val_batch_1_batches):
-            with torch.no_grad():
-                val_output_0 = self._lobe(val_batch_0)
-                val_output_1 = self._lobe(val_batch_1)
-
-                val_output_0_accum.append(val_output_0.clone().detach().requires_grad_(True))
-                val_output_1_accum.append(val_output_1.clone().detach().requires_grad_(True))
-
-        val_output_0 = torch.cat(val_output_0_accum, dim=0)
-        val_output_1 = torch.cat(val_output_1_accum, dim=0)
-
-        score = self._estimator.fit([val_output_0, val_output_1]).score
-        self._estimator.save()
+            score = self._estimator.fit([val_output_0, val_output_1]).score
+            self._estimator.save()
 
         return score
 
