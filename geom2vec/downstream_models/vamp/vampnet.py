@@ -290,7 +290,6 @@ class VAMPNet:
             x_1 = self._lobe_lagged(batch_1)
 
         loss = self._estimator.fit([x_0, x_1]).loss
-        print('loss', loss)
         loss.backward()
 
         self._optimizer.step()
