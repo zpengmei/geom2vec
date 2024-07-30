@@ -15,7 +15,7 @@ setup(
         'ase',
         'rdkit',
         'matplotlib',
-        'einops'
+        'einops',
         'grokfast_pytorch',
     ]
 )

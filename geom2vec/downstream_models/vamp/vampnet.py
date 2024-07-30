@@ -284,9 +284,11 @@ class VAMPNet:
         if self._lobe_lagged is not None:
             self._lobe_lagged.train()
 
-        # Zero gradients only at the beginning of an accumulation cycle
+        # Zero gradients and initialize accumulators only at the beginning of an accumulation cycle
         if self._step % grad_accum_steps == 0:
             self._optimizer.zero_grad()
+            x_0_accum = []
+            x_1_accum = []
 
         x_0 = self._lobe(batch_0)
         if self._lobe_lagged is None:
@@ -294,17 +296,26 @@ class VAMPNet:
         else:
             x_1 = self._lobe_lagged(batch_1)
 
-        loss = self._estimator.fit([x_0, x_1]).loss
+        # Accumulate the outputs
+        x_0_accum.append(x_0)
+        x_1_accum.append(x_1)
 
-        # Accumulate gradients
-        loss.backward()
-
-        # Step the optimizer only after 'grad_accum_steps' calls to partial_fit
         if (self._step + 1) % grad_accum_steps == 0:
-            self._optimizer.step()
-            # It's not necessary to zero gradients here since it's done at the start of the cycle
+            # Concatenate accumulated outputs
+            accumulated_x_0 = torch.cat(x_0_accum, dim=0)
+            accumulated_x_1 = torch.cat(x_1_accum, dim=0)
 
-        self._training_scores.append((-loss).item())
+            loss = self._estimator.fit([accumulated_x_0, accumulated_x_1]).loss
+
+            # Accumulate gradients
+            loss.backward()
+
+            # Step the optimizer only after 'grad_accum_steps' calls to partial_fit
+            self._optimizer.step()
+            self._training_scores.append((-loss).item())
+        else:
+            loss = None
+
         self._step += 1
 
         return self, loss
