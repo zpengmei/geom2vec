@@ -256,6 +256,8 @@ class VAMPNet:
             epsilon=self._epsilon, mode=self._mode, symmetrized=self._symmetrized
         )
 
+        self._last_train_loss = None
+
     @property
     def training_scores(self):
         return np.array(self._training_scores)
@@ -287,8 +289,8 @@ class VAMPNet:
         # Zero gradients and initialize accumulators only at the beginning of an accumulation cycle
         if self._step % grad_accum_steps == 0:
             self._optimizer.zero_grad()
-            x_0_accum = []
-            x_1_accum = []
+            self._x_0_accum = []
+            self._x_1_accum = []
 
         x_0 = self._lobe(batch_0)
         if self._lobe_lagged is None:
@@ -297,13 +299,13 @@ class VAMPNet:
             x_1 = self._lobe_lagged(batch_1)
 
         # Accumulate the outputs
-        x_0_accum.append(x_0)
-        x_1_accum.append(x_1)
+        self._x_0_accum.append(x_0)
+        self._x_1_accum.append(x_1)
 
         if (self._step + 1) % grad_accum_steps == 0:
             # Concatenate accumulated outputs
-            accumulated_x_0 = torch.cat(x_0_accum, dim=0)
-            accumulated_x_1 = torch.cat(x_1_accum, dim=0)
+            accumulated_x_0 = torch.cat(self._x_0_accum, dim=0)
+            accumulated_x_1 = torch.cat(self._x_1_accum, dim=0)
 
             loss = self._estimator.fit([accumulated_x_0, accumulated_x_1]).loss
 
@@ -313,12 +315,13 @@ class VAMPNet:
             # Step the optimizer only after 'grad_accum_steps' calls to partial_fit
             self._optimizer.step()
             self._training_scores.append((-loss).item())
+            self._last_train_loss = loss  # Update the last valid loss
         else:
             loss = None
 
         self._step += 1
 
-        return self, loss
+        return self, self._last_train_loss   # Return the last valid loss
 
     def validate(self, val_data):
         """Evaluates the currently set lobe(s) on validation data and returns the value of the configured score.
@@ -332,12 +335,14 @@ class VAMPNet:
         score : torch.Tensor
             The value of the score.
         """
-
         val_batch_0, val_batch_1 = val_data[0], val_data[1]
 
         self._lobe.eval()
         if self._lobe_lagged is not None:
             self._lobe_lagged.eval()
+
+        val_x_0_accum = []
+        val_x_1_accum = []
 
         with torch.no_grad():
             val_output_0 = self._lobe(val_batch_0)
@@ -346,8 +351,15 @@ class VAMPNet:
             else:
                 val_output_1 = self._lobe_lagged(val_batch_1)
 
-            score = self._estimator.fit([val_output_0, val_output_1]).score
-            self._estimator.save()
+            val_x_0_accum.append(val_output_0)
+            val_x_1_accum.append(val_output_1)
+
+        # Concatenate accumulated validation outputs
+        accumulated_val_x_0 = torch.cat(val_x_0_accum, dim=0)
+        accumulated_val_x_1 = torch.cat(val_x_1_accum, dim=0)
+
+        score = self._estimator.fit([accumulated_val_x_0, accumulated_val_x_1]).score
+        self._estimator.save()
 
         return score
 
