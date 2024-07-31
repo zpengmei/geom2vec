@@ -8,9 +8,11 @@ from tqdm import tqdm
 import mdtraj as md
 import MDAnalysis as mda
 from geom2vec.data import Preprocessing
-from geom2vec.downstream_models.lobe_otf import Lobe
+from geom2vec.downstream_models.lobe_otf import OTFLobe as Lobe
 from geom2vec.downstream_models import VAMPNet
 from geom2vec import create_model
+# use dataparallel
+from torch.nn import DataParallel
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(description='Train a VAMPNet model on trpcage')
@@ -116,7 +118,7 @@ atomic_masses = protein_residues.masses
 atomic_masses = np.round(atomic_masses, 3)
 atomic_types = [list(mass_mapping.keys())[list(mass_mapping.values()).index(mass)] for mass in atomic_masses]
 atomic_numbers = [atomic_mapping[atom] for atom in atomic_types]
-atomic_numbers = torch.tensor(atomic_numbers)
+atomic_numbers = np.array(atomic_numbers)
 
 # Define the device
 device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
@@ -126,28 +128,21 @@ rep_model = create_model(
     model_type='vis',
     cutoff=5,
     hidden_channels=16,
-    num_layers=3,
+    num_layers=6,
     num_rbf=16,
     device=device
 )
 
-# print(atomic_numbers.shape)
-# print(train_data[0][0].shape)
-# print(xyz.shape)
-# Initialize the Lobe network
 net = Lobe(
+    input_dim=16,
     representation_model=rep_model,
     atomic_numbers=atomic_numbers,
     hidden_channels=16,
-    intermediate_channels=16,
-    output_channels=output_channels,
-    num_layers=2,
-    batch_norm=args.batch_norm,
-    vector_feature=args.vector_feature,
-    mlp_dropout=args.mlp_dropout,
-    mlp_out_activation=args.mlp_out_activation,
-    device=device,
+    output_dim=output_channels,
+    vector_features=args.vector_feature,
 )
+
+net = DataParallel(net).to(device)
 
 # Initialize the VAMPNet model
 model = VAMPNet(
@@ -170,6 +165,7 @@ model.fit(
 )
 end = time.time()
 print('Time elapsed:', end - start)
+print(model.training_scores)
 
 # Create directory to save the model if it doesn't exist
 if not os.path.exists(args.save_dir):
@@ -177,7 +173,7 @@ if not os.path.exists(args.save_dir):
 model.save_model(args.save_dir)
 
 # Transform the dataset and save collective variables (CVs)
-cvs = model.transform(xyz, return_cv=True, lag_time=args.lag_time, batch_size=args.batch_size)
+cvs = model.transform(xyz, return_cv=True, lag_time=lag_time, batch_size=args.batch_size)
 torch.save(cvs, os.path.join(args.save_dir, 'cvs.pt'))
 
 # Save training time and GPU information
