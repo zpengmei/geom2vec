@@ -54,7 +54,7 @@ class Lobe(nn.Module):
         batch_norm: bool = False,
         vector_feature: bool = True,
         mlp_dropout: float = 0.0,
-        mlp_out_activation=Optional[nn.Module],
+        mlp_out_activation: Optional[nn.Module] = None,
         device: torch.device = torch.device("cpu"),
         token_mixer: str = "none",
         num_mixer_layers: int = 4,
