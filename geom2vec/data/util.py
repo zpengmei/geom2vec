@@ -63,7 +63,7 @@ def forward_stop_torch(in_domain):
         the trajectory is indicated by len(d).
 
     """
-    t = torch.nonzero(~in_domain, as_tuple=True)[0]
+    (t,) = torch.nonzero(torch.logical_not(in_domain), as_tuple=True)
     t = torch.cat((torch.tensor([-1]), t, torch.tensor([len(in_domain)])))
     return torch.repeat_interleave(t[1:], torch.diff(t))[:-1]
 
@@ -85,6 +85,6 @@ def backward_stop_torch(in_domain):
         the trajectory is indicated by -1.
 
     """
-    t = torch.nonzero(~in_domain, as_tuple=True)[0]
+    (t,) = torch.nonzero(torch.logical_not(in_domain), as_tuple=True)
     t = torch.cat((torch.tensor([-1]), t, torch.tensor([len(in_domain)])))
     return torch.repeat_interleave(t[:-1], torch.diff(t))[1:]
