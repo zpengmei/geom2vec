@@ -57,7 +57,7 @@ elif args.system == 'chignolin':
 
     num_atoms = 166
     lag_time = 10
-    output_channels = 3
+    output_channels = 2
     topology_file = "/project/dinner/anton_trajs/Chignolin/DESRES-Trajectory_CLN025-0-protein/CLN025-0-protein/chignolin.pdb"
     trajectory_file = "/project/dinner/anton_trajs/Chignolin/DESRES-Trajectory_CLN025-0-protein/CLN025-0-protein/CLN025-0-protein-000.dcd"
 

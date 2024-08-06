@@ -30,8 +30,12 @@ for seed in "${SEED[@]}"; do
       --seed ${seed} \
       --system ${system} \
       --batch_size 1000 \
-      --n_epochs 50
+      --n_epochs 50 \
+      --train_patience 200 \
+      --train_valid_interval 200 \
+      --valid_patience 5
   done
 done
+
 
 
