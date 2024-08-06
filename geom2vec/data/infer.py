@@ -79,10 +79,12 @@ def create_model(
         try:
             checkpoint = torch.load(checkpoint_path, map_location=device)
             model.load_state_dict(checkpoint, strict=False)
-            model.eval()
             print(f"Model loaded from {checkpoint_path}")
+            model.eval()
         except Exception as e:
             print(f"Error loading the model from {checkpoint_path}")
+            #print the error message
+            print(e)
 
     else:
         print("Model created from scratch.")
