@@ -92,7 +92,6 @@ if args.system != 'chignolin':
     xyz = xyz[::2]
 
 preprocess = Preprocessing(torch_or_numpy='torch')
-time_lagged_dataset = preprocess.create_time_lagged_dataset(xyz.to(torch.float32), lag_time=lag_time)
 
 # Split the dataset into training and validation sets
 training_fraction = args.training_fraction
@@ -103,9 +102,9 @@ train_dataset = dataset[:int(training_fraction*total_samples)]
 val_dataset = dataset[int(0.8*total_samples):int(0.9*total_samples)]
 test_dataset = dataset[int(0.9*total_samples):]
 
-trainset = preprocess.create_time_lagged_dataset(train_dataset.to(torch.float32), lag_time=args.lag_time)
-valset = preprocess.create_time_lagged_dataset(val_dataset.to(torch.float32), lag_time=args.lag_time)
-testset = preprocess.create_time_lagged_dataset(test_dataset.to(torch.float32), lag_time=args.lag_time)
+trainset = preprocess.create_time_lagged_dataset(train_dataset.to(torch.float32), lag_time=lag_time)
+valset = preprocess.create_time_lagged_dataset(val_dataset.to(torch.float32), lag_time=lag_time)
+testset = preprocess.create_time_lagged_dataset(test_dataset.to(torch.float32), lag_time=lag_time)
 
 train_loader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True)
 val_loader = DataLoader(valset, batch_size=args.batch_size, shuffle=False)

@@ -23,7 +23,7 @@ for seed in "${SEED[@]}"; do
   for fraction in "${TRAINING_FRACTIONS[@]}"; do
     save_dir="/project/dinner/zpengmei/geom2vec/runs/temporal/otf/${system}/${fraction}/${seed}"
     mkdir -p $save_dir
-    python /project/dinner/zpengmei/geom2vec/examples/temporal/training_otf.py \
+    python /project/dinner/zpengmei/geom2vec/examples/training_scripts/temporal/training_otf.py \
       --training_fraction ${fraction} \
       --vector_feature \
       --save_dir ${save_dir} \
