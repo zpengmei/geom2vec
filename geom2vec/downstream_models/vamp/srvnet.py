@@ -255,8 +255,9 @@ class SRVNet:
         self._lobe.train()
 
         self._optimizer.zero_grad()
-        x_0 = self._lobe(batch_0)
-        x_1 = self._lobe(batch_1)
+        batch_01 = torch.cat([batch_0, batch_1])
+        x01 = self._lobe(batch_01)
+        x_0, x_1 = torch.split(x01, [len(batch_0), len(batch_1)])
 
         loss = self._estimator.fit([x_0, x_1]).loss
 
