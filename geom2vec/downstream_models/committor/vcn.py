@@ -142,11 +142,11 @@ class VCN(nn.Module):
             model = self._lobe
             k = self._k
 
-            model.train()
-
             for data, ina, inb in progress(
                 train_loader, desc="batch", total=len(train_loader), leave=False
             ):
+                model.train()
+
                 step_counter += 1
                 optimizer.zero_grad()
                 data = data.to(self._device)
