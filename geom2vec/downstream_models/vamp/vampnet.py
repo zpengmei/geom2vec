@@ -516,6 +516,7 @@ class VAMPNet:
             self,
             train_trajectory,
             valid_trajectory=None,
+            valid_loader=None,
             num_steps=1000,
             batch_size=10000,
             lag_time=1,
@@ -580,17 +581,27 @@ class VAMPNet:
                         and step_counter % train_valid_interval == 0
                 ):
                     with torch.no_grad():
-                        valid_step_counter = 0
-                        for val_batch_0, val_batch_1 in self._traj_sampler(valid_trajectory, batch_size, lag_time):
-                            self.validate(
-                                (
-                                    val_batch_0.to(device=self._device),
-                                    val_batch_1.to(device=self._device),
+                        if valid_trajectory is not None:
+                            valid_step_counter = 0
+                            for val_batch_0, val_batch_1 in self._traj_sampler(valid_trajectory, batch_size, lag_time):
+                                self.validate(
+                                    (
+                                        val_batch_0.to(device=self._device),
+                                        val_batch_1.to(device=self._device),
+                                    )
                                 )
-                            )
-                            valid_step_counter += 1
-                            if valid_step_counter > valid_steps:
-                                break
+                                valid_step_counter += 1
+                                if valid_step_counter > valid_steps:
+                                    break
+                        elif valid_loader is not None:
+                            print("using the validation loader instead of random sampling")
+                            for val_batch_0, val_batch_1 in valid_loader:
+                                self.validate(
+                                    (
+                                        val_batch_0.to(device=self._device),
+                                        val_batch_1.to(device=self._device),
+                                    )
+                                )
 
                         mean_score = self._estimator.output_mean_score()
                         self._validation_scores.append(mean_score.item())
