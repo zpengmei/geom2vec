@@ -577,7 +577,7 @@ class VAMPNet:
                         return self
 
                 if (
-                        valid_trajectory is not None
+                        valid_trajectory is not None or valid_loader is not None
                         and step_counter % train_valid_interval == 0
                 ):
                     with torch.no_grad():
