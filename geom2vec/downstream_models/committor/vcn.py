@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from grokfast_pytorch import GrokFastAdamW
+from adam_atan2_pytorch import AdamAtan2
 from scipy.special import expit
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -33,7 +34,7 @@ class VCN(nn.Module):
         self._epsilon = epsilon
         self._k = k
 
-        assert optimizer in ["adam", "adamw", "sgd", "grokfastadamw"]
+        assert optimizer in ["adam", "adamw", "sgd", "grokfastadamw", "adamatan2"]
 
         if optimizer == "adam":
             self._optimizer = torch.optim.Adam(
@@ -49,6 +50,10 @@ class VCN(nn.Module):
             )
         elif optimizer == "grokfastadamw":
             self._optimizer = GrokFastAdamW(
+                self.parameters(), lr=learning_rate, weight_decay=weight_decay
+            )
+        elif optimizer == "adamatan2":
+            self._optimizer = AdamAtan2(
                 self.parameters(), lr=learning_rate, weight_decay=weight_decay
             )
 

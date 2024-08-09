@@ -17,6 +17,7 @@ setup(
         'matplotlib',
         'einops',
         'grokfast_pytorch',
+        'adam-atan2-pytorch'
     ]
 )
 

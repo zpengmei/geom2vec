@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from grokfast_pytorch import GrokFastAdamW
+from adam_atan2_pytorch import AdamAtan2
 from tqdm import *
 
 from .dataprocessing import Postprocessing_vamp
@@ -229,6 +230,7 @@ class VAMPNet:
             "SGD": torch.optim.SGD,
             "RMSprop": torch.optim.RMSprop,
             "GrokFastAdamW": GrokFastAdamW,
+            "AdamAtan2": AdamAtan2,
         }
         if optimizer not in self.optimizer_types.keys():
             raise ValueError(
