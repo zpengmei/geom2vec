@@ -493,3 +493,132 @@ class VAMPNet:
 
         return self._lobe, self._lobe_lagged
 
+    def _traj_sampler(self, traj, batch_size, lag_time):
+        traj_len = traj.shape[0]
+        if traj_len < lag_time:
+            raise ValueError("Trajectory length is smaller than the lag time")
+
+        segment_size = (len(traj) - lag_time) // batch_size
+        if segment_size < 1:
+            raise ValueError("Batch size is too large for the given lag time")
+
+        offset_indices = np.random.randint(segment_size)
+        start_indices = offset_indices + segment_size * np.arange(batch_size)
+
+        data_t = torch.tensor(traj[start_indices], dtype=torch.float32)
+        data_t_lagged = torch.tensor(traj[start_indices + lag_time], dtype=torch.float32)
+
+        yield data_t, data_t_lagged
+
+    def step_trainer(
+            self,
+            train_trajectory,
+            valid_trajectory=None,
+            num_steps=1000,
+            batch_size=10000,
+            lag_time=1,
+            progress=tqdm,
+            train_patience=1000,
+            valid_patience=1000,
+            train_valid_interval=1000,
+    ):
+        """Performs fit on data.
+
+        Parameters
+        ----------
+        train_loader : torch.utils.data.DataLoader
+            Yield a tuple of batches representing instantaneous and time-lagged samples for training.
+        n_epochs : int, default=1
+            The number of epochs (i.e., passes through the training data) to use for training.
+        validation_loader : torch.utils.data.DataLoader, optional, default=None
+             Yield a tuple of batches representing instantaneous and time-lagged samples for validation.
+        progress : context manager, default=tqdm
+
+        Returns
+        -------
+        self : VAMPNet
+        """
+
+        self._step = 0
+        best_train_score = 0
+        best_valid_score = 0
+        train_patience_counter = 0
+        valid_patience_counter = 0
+        step_counter = 0
+
+        best_lobe_state = self._lobe.state_dict()
+        if self._lobe_lagged is not None:
+            best_lobe_lagged_state = self._lobe_lagged.state_dict()
+
+        for step in progress(
+                range(num_steps), desc="epoch", total=num_steps, leave=False
+        ):
+            for batch_0, batch_1 in tqdm(self._traj_sampler(train_trajectory, batch_size, lag_time)):
+                step_counter += 1
+                _, loss = self.partial_fit(
+                    (batch_0.to(device=self._device), batch_1.to(device=self._device))
+                )
+
+                if loss.item() < best_train_score:
+                    best_train_score = loss.item()
+                    train_patience_counter = 0
+                else:
+                    train_patience_counter += 1
+                    if train_patience_counter > train_patience:
+                        print(f"Training patience reached at step {step}")
+                        # break the outer loop
+                        self._lobe.load_state_dict(best_lobe_state)
+                        if self._lobe_lagged is not None:
+                            self._lobe_lagged.load_state_dict(best_lobe_lagged_state)
+                        return self
+
+                if (
+                        valid_trajectory is not None
+                        and step_counter % train_valid_interval == 0
+                ):
+                    with torch.no_grad():
+                        for val_batch_0, val_batch_1 in self._traj_sampler(valid_trajectory, batch_size, lag_time):
+                            self.validate(
+                                (
+                                    val_batch_0.to(device=self._device),
+                                    val_batch_1.to(device=self._device),
+                                )
+                            )
+
+                        mean_score = self._estimator.output_mean_score()
+                        self._validation_scores.append(mean_score.item())
+                        self._estimator.clear()
+
+                        print(step, mean_score.item())
+
+                        if mean_score.item() > best_valid_score:
+                            best_valid_score = mean_score.item()
+                            valid_patience_counter = 0
+                            best_lobe_state = self._lobe.state_dict()
+                            if self._lobe_lagged is not None:
+                                best_lobe_lagged_state = self._lobe_lagged.state_dict()
+
+                        else:
+                            valid_patience_counter += 1
+                            if valid_patience_counter > valid_patience:
+                                print(f"Validation patience reached at step {step}")
+                                # break the outer loop
+                                # load the best model
+                                self._lobe.load_state_dict(best_lobe_state)
+
+                                if self._lobe_lagged is not None:
+                                    self._lobe_lagged.load_state_dict(
+                                        best_lobe_lagged_state
+                                    )
+                                return self
+
+                        if self._save_model_interval is not None:
+                            if (step + 1) % self._save_model_interval == 0:
+                                m = self.fetch_model()
+                                self._save_models.append((step, m))
+
+        self._lobe.load_state_dict(best_lobe_state)
+        if self._lobe_lagged is not None:
+            self._lobe_lagged.load_state_dict(best_lobe_lagged_state)
+
+        return self
