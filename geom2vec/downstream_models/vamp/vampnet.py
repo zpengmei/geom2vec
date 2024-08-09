@@ -520,6 +520,7 @@ class VAMPNet:
             batch_size=10000,
             lag_time=1,
             progress=tqdm,
+            valid_steps = 100,
             train_patience=1000,
             valid_patience=1000,
             train_valid_interval=1000,
@@ -579,6 +580,7 @@ class VAMPNet:
                         and step_counter % train_valid_interval == 0
                 ):
                     with torch.no_grad():
+                        valid_step_counter = 0
                         for val_batch_0, val_batch_1 in self._traj_sampler(valid_trajectory, batch_size, lag_time):
                             self.validate(
                                 (
@@ -586,6 +588,9 @@ class VAMPNet:
                                     val_batch_1.to(device=self._device),
                                 )
                             )
+                            valid_step_counter += 1
+                            if valid_step_counter > valid_steps:
+                                break
 
                         mean_score = self._estimator.output_mean_score()
                         self._validation_scores.append(mean_score.item())
