@@ -507,8 +507,8 @@ class VAMPNet:
         offset_indices = np.random.randint(segment_size)
         start_indices = offset_indices + segment_size * np.arange(batch_size)
 
-        data_t = torch.tensor(traj[start_indices], dtype=torch.float32)
-        data_t_lagged = torch.tensor(traj[start_indices + lag_time], dtype=torch.float32)
+        data_t = traj[start_indices]
+        data_t_lagged = traj[start_indices + lag_time]
 
         yield data_t, data_t_lagged
 
@@ -556,7 +556,7 @@ class VAMPNet:
         for step in progress(
                 range(num_steps), desc="epoch", total=num_steps, leave=False
         ):
-            for batch_0, batch_1 in tqdm(self._traj_sampler(train_trajectory, batch_size, lag_time)):
+            for batch_0, batch_1 in self._traj_sampler(train_trajectory, batch_size, lag_time):
                 step_counter += 1
                 _, loss = self.partial_fit(
                     (batch_0.to(device=self._device), batch_1.to(device=self._device))
