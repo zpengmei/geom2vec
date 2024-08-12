@@ -110,6 +110,163 @@ class Preprocessing:
 
         return dataset
 
+    def create_vcn_dataset(self, data, ina, inb, lag_time):
+        """
+        Create a dataset for training VCNs.
+
+        Parameters
+        ----------
+        data : list or ndarray
+            The original trajectories.
+        ina : list or ndarray
+            The initial condition.
+        inb : list or ndarray
+            The final condition.
+        lag_time : int
+            The lag time used to create the dataset.
+
+        Returns
+        -------
+        dataset : list
+            List of tuples: the length of the list represents the number of data.
+            Each tuple has 6 elements:
+            instantaneous and time-lagged data frames,
+            instantaneous and time-lagged initial conditions,
+            instantaneous and time-lagged final conditions.
+
+        """
+        assert len(data) == len(ina) == len(inb)
+
+        data = self._seq_trajs(data)
+        ina = self._seq_trajs(ina)
+        inb = self._seq_trajs(inb)
+
+        num_trajs = len(data)
+        dataset = []
+
+        for k in range(num_trajs):
+            L_all = data[k].shape[0]
+            L_re = L_all - lag_time
+
+            assert ina[k].shape == inb[k].shape == (L_all, 1)
+
+            data_traj = data[k]
+
+            if self._torch_or_numpy == "numpy":
+                ina_traj = ina[k].astype(bool)
+                inb_traj = inb[k].astype(bool)
+            else:
+                ina_traj = ina[k].bool()
+                inb_traj = inb[k].bool()
+
+            for i in range(L_re):
+                dataset.append(
+                    (
+                        data_traj[i],
+                        data_traj[i + lag_time],
+                        ina_traj[i],
+                        ina_traj[i + lag_time],
+                        inb_traj[i],
+                        inb_traj[i + lag_time],
+                    )
+                )
+
+        return dataset
+
+    def create_svcn_dataset(self, data, ina, inb, lag_time):
+        """
+        Create a dataset for training SVCNs.
+
+        Parameters
+        ----------
+        data : list or ndarray
+            The original trajectories.
+        ina : list or ndarray
+            The initial condition.
+        inb : list or ndarray
+            The final condition.
+        lag_time : int
+            The lag time used to create the dataset.
+
+        Returns
+        -------
+        dataset : list
+            List of tuples: the length of the list represents the number of data.
+            Each tuple has 12 elements:
+            instantaneous and time-lagged data frames,
+            instantaneous and time-lagged initial conditions,
+            instantaneous and time-lagged final conditions,
+            and 6 other entries.
+
+        """
+        if self._torch_or_numpy == "numpy":
+            from .util import (
+                forward_stop,
+                backward_stop,
+                count_transition_paths_windows,
+            )
+        else:
+            from .util import (
+                forward_stop_torch as forward_stop,
+                backward_stop_torch as backward_stop,
+                count_transition_paths_windows_torch as count_transition_paths_windows,
+            )
+
+        assert len(data) == len(ina) == len(inb)
+
+        data = self._seq_trajs(data)
+        ina = self._seq_trajs(ina)
+        inb = self._seq_trajs(inb)
+
+        num_trajs = len(data)
+        dataset = []
+
+        for k in range(num_trajs):
+            L_all = data[k].shape[0]
+            L_re = L_all - lag_time
+
+            assert ina[k].shape == inb[k].shape == (L_all, 1)
+
+            data_traj = data[k]
+
+            if self._torch_or_numpy == "numpy":
+                ina_traj = ina[k].astype(bool)
+                inb_traj = inb[k].astype(bool)
+                ind_traj = np.logical_not(np.logical_or(ina_traj, inb_traj))
+            else:
+                ina_traj = ina[k].bool()
+                inb_traj = inb[k].bool()
+                ind_traj = torch.logical_not(torch.logical_or(ina_traj, inb_traj))
+
+            r = backward_stop(ind_traj[:, 0])
+            s = forward_stop(ind_traj[:, 0])
+            ab = count_transition_paths_windows(
+                ind_traj[:, 0], ina_traj[:, 0], inb_traj[:, 0], lag_time
+            )[:, None]
+            ba = count_transition_paths_windows(
+                ind_traj[:, 0], inb_traj[:, 0], ina_traj[:, 0], lag_time
+            )[:, None]
+
+            for i in range(L_re):
+                dataset.append(
+                    (
+                        data_traj[i],
+                        data_traj[i + lag_time],
+                        ina_traj[i],
+                        ina_traj[i + lag_time],
+                        inb_traj[i],
+                        inb_traj[i + lag_time],
+                        ind_traj[min(i + lag_time, s[i])],
+                        ina_traj[min(i + lag_time, s[i])],
+                        inb_traj[min(i + lag_time, s[i])],
+                        ina_traj[max(i, r[i + lag_time])],
+                        inb_traj[max(i, r[i + lag_time])],
+                        ab[i] + ba[i],
+                    )
+                )
+
+        return dataset
+
     def create_time_lagged_stop_dataset(self, data, ina, inb, lag_time):
         """Create a time-lagged dataset for the boundary condition with stopped time.
 
