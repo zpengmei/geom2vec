@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 from grokfast_pytorch import GrokFastAdamW
 from adam_atan2_pytorch import AdamAtan2
-from scipy.special import expit
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -90,10 +89,10 @@ class VCN(nn.Module):
 
         k = self._k
         eps = self._epsilon
-        q = nn.sigmoid(x)
-
+        q = torch.sigmoid(x)
         q = q * (1 + 2 * eps) - eps
         q = torch.clip(q, min=0, max=1)
+        q = torch.where(ina, 0, torch.where(inb, 1, q))
         q0, q1 = q
         loss_var = torch.mean(0.5 * (q0 - q1) ** 2)
         loss_boundary = torch.mean(0.5 * k * (x * ina + eps) ** 2)
@@ -227,14 +226,19 @@ class VCN(nn.Module):
         out_list = []
         with torch.no_grad():
             loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
-            for data, _, _ in tqdm(loader):
+            for data, ina, inb in tqdm(loader):
                 data = data.to(device)
+                ina = ina.to(device)
+                inb = inb.to(device)
                 out = model(data)
+                out = torch.sigmoid(out)
+                out = out * (1 + 2 * eps) - eps
+                out = torch.clip(out, min=0, max=1)
+                out = torch.where(ina, 0, torch.where(inb, 1, out))
                 out_list.append(out.clone().detach().cpu())
 
         q = torch.cat(out_list, dim=0)
         q = q.numpy()
-        q = np.clip((1 + 2 * eps) * expit(q) - eps, 0, 1)
         return q
 
     def fetch_model(self):
