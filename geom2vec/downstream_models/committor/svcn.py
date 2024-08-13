@@ -73,25 +73,26 @@ class SVCN(nn.Module):
     def validation_bc_losses(self):
         return np.array(self._validation_bc_losses)
 
-    def _compute_committor(self, x, a, b):
-        eps = self._epsilon
-        u = self._lobe(x)
-        bc_loss = a * (u - (0 - eps)) ** 2 + b * (u - (1 + eps)) ** 2
-        q = torch.where(a, 0, torch.where(b, 1, torch.clamp(u, 0, 1)))
-        return q, bc_loss
-
     def _loss_fns(self, batch):
-        batch = [tensor.to(self._device) for tensor in batch]
+        model = self._lobe
+        device = self._device
+        eps = self._epsilon
+        k = self._k
+        lag_time = self._lag_time
+
+        batch = [tensor.to(device) for tensor in batch]
         x0, x1, a0, a1, b0, b1, dd, da, db, ad, bd, ab_ba = batch
 
-        x01 = torch.cat([x0, x1])
-        a01 = torch.cat([a0, a1])
-        b01 = torch.cat([b0, b1])
+        x = torch.cat([x0, x1])
+        a = torch.cat([a0, a1])
+        b = torch.cat([b0, b1])
 
-        q01, bc01 = self._compute_committor(x01, a01, b01)
+        u = model(x)
+        q = torch.where(a, 0, torch.where(b, 1, torch.clamp(u, 0, 1)))
+        bc = a * (u - (0 - eps)) ** 2 + b * (u - (1 + eps)) ** 2
 
-        q0, q1 = torch.unflatten(q01, 0, (2, -1))
-        bc0, bc1 = torch.unflatten(bc01, 0, (2, -1))
+        q0, q1 = torch.unflatten(q, 0, (2, -1))
+        bc0, bc1 = torch.unflatten(bc, 0, (2, -1))
 
         score = (
             dd * (q1 - q0) ** 2
@@ -100,8 +101,8 @@ class SVCN(nn.Module):
             + ad * (q1 - 0) ** 2
             + bd * (q1 - 1) ** 2
             + ab_ba
-        ) / (2 * self._lag_time)
-        bc_loss = 0.5 * self._k * (bc0 + bc1)
+        ) / (2 * lag_time)
+        bc_loss = 0.5 * k * (bc0 + bc1)
 
         return score, bc_loss
 
@@ -208,12 +209,16 @@ class SVCN(nn.Module):
         return score, bc_loss
 
     def transform(self, dataset, batch_size):
-        self._lobe.eval()
+        model = self._lobe
+        device = self._device
+
+        model.eval()
         out_list = []
         with torch.no_grad():
             for batch in tqdm(DataLoader(dataset, batch_size=batch_size)):
-                x, a, b = [tensor.to(self._device) for tensor in batch]
-                q, _ = self._compute_committor(x, a, b)
+                x, a, b = [tensor.to(device) for tensor in batch]
+                u = model(x)
+                q = torch.where(a, 0, torch.where(b, 1, torch.clamp(u, 0, 1)))
                 out_list.append(q.cpu())
         return torch.cat(out_list).numpy()
 
