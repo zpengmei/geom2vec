@@ -7,11 +7,14 @@ from copy import copy
 
 
 class Preprocessing:
-    """Preprocess the original trajectories to create datasets for training.
+    """
+    Preprocess the original trajectories to create datasets for training.
 
     Parameters
     ----------
-    dtype : dtype, default = float
+    torch_or_numpy
+        Array type of the elements of the output dataset.
+
     """
 
     def __init__(
@@ -45,7 +48,10 @@ class Preprocessing:
         return data
 
     def create_time_lagged_dataset(self, data, lag_time):
-        """Create a time-lagged dataset.
+        """
+        Create a time-lagged dataset.
+
+        This dataset is used for VAMPnet/SRV training/validation.
 
         Parameters
         ----------
@@ -60,6 +66,7 @@ class Preprocessing:
         dataset : list
             List of tuples: the length of the list represents the number of data.
             Each tuple has two elements: one is the instantaneous data frame, the other is the corresponding time-lagged data frame.
+
         """
 
         data = self._seq_trajs(data)
@@ -75,7 +82,10 @@ class Preprocessing:
         return dataset
 
     def create_boundary_dataset(self, data, ina, inb):
-        """Create a dataset for the boundary condition.
+        """
+        Create a dataset for the boundary condition.
+
+        This dataset is used for VCN/SVCN prediction.
 
         Parameters
         ----------
@@ -93,6 +103,7 @@ class Preprocessing:
         dataset : list
             List of tuples: the length of the list represents the number of data.
             Each tuple has three elements: one is the instantaneous data frame, the other two are the boundary conditions
+
         """
 
         assert len(data) == len(ina) == len(inb)
@@ -113,6 +124,8 @@ class Preprocessing:
     def create_vcn_dataset(self, data, ina, inb, lag_time):
         """
         Create a dataset for training VCNs.
+
+        This dataset is used for VCN training/validation.
 
         Parameters
         ----------
@@ -176,6 +189,8 @@ class Preprocessing:
     def create_svcn_dataset(self, data, ina, inb, lag_time):
         """
         Create a dataset for training SVCNs.
+
+        This dataset is used for SVCN training/validation.
 
         Parameters
         ----------
