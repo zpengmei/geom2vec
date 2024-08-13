@@ -87,7 +87,6 @@ class SVCN(torch.nn.Module):
     def _compute_committor(self, x, a, b):
         eps = self._epsilon
         u = self._lobe(x)
-        u = torch.tanh(u) * (0.5 + eps) + 0.5
         bc_loss = a * (u - (0 - eps)) ** 2 + b * (u - (1 + eps)) ** 2
         q = torch.where(a, 0, torch.where(b, 1, torch.clamp(u, 0, 1)))
         return q, bc_loss

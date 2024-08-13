@@ -99,14 +99,12 @@ class VCN(nn.Module):
 
         k = self._k
         eps = self._epsilon
-        u = torch.sigmoid(x)
-        u = u * (1 + 2 * eps) - eps
-        q = torch.clip(u, min=0, max=1)
+        q = torch.clip(x, min=0, max=1)
         q = torch.where(ina, 0, torch.where(inb, 1, q))
         q0, q1 = q
         loss_var = torch.mean(0.5 * (q0 - q1) ** 2)
-        loss_boundary = torch.mean(0.5 * k * ina * (u - (0 - eps)) ** 2)
-        loss_boundary += torch.mean(0.5 * k * inb * (u - (1 + eps)) ** 2)
+        loss_boundary = torch.mean(0.5 * k * ina * (x - (0 - eps)) ** 2)
+        loss_boundary += torch.mean(0.5 * k * inb * (x - (1 + eps)) ** 2)
         return loss_var, loss_boundary
 
     def fit(
@@ -232,7 +230,6 @@ class VCN(nn.Module):
         return self
 
     def transform(self, dataset, batch_size):
-        eps = self._epsilon
         model = self._lobe
         model.eval()
         device = self._device
@@ -246,8 +243,6 @@ class VCN(nn.Module):
                 ina = ina.to(device)
                 inb = inb.to(device)
                 out = model(data)
-                out = torch.sigmoid(out)
-                out = out * (1 + 2 * eps) - eps
                 out = torch.clip(out, min=0, max=1)
                 out = torch.where(ina, 0, torch.where(inb, 1, out))
                 out_list.append(out.clone().detach().cpu())
