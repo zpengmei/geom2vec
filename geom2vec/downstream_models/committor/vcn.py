@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 import numpy as np
 import torch
@@ -18,6 +18,7 @@ class VCN(nn.Module):
         self,
         lobe: nn.Module,
         *,
+        score: Literal["vcn", "svcn"] = "vcn",
         optimizer: str = "adam",
         device: str = "cuda",
         learning_rate: float = 5e-4,
@@ -73,14 +74,14 @@ class VCN(nn.Module):
         return np.array(self._validation_bc_losses)
 
     def _loss_fns(self, batch):
+        """Compute the variational and boundary loss functions."""
         model = self._lobe
         device = self._device
         eps = self._epsilon
         k = self._k
-        lag_time = self._lag_time
 
         batch = [tensor.to(device) for tensor in batch]
-        x0, x1, a0, a1, b0, b1 = batch
+        x0, x1, a0, a1, b0, b1, *score_data = batch
 
         x = torch.cat([x0, x1])
         a = torch.cat([a0, a1])
@@ -93,10 +94,26 @@ class VCN(nn.Module):
         q0, q1 = torch.unflatten(q, 0, (2, -1))
         bc0, bc1 = torch.unflatten(bc, 0, (2, -1))
 
-        score = (q0 - q1) ** 2 / (2 * lag_time)
+        score_types = {"vcn": self._vcn_score, "svcn": self._svcn_score}
+        score = score_types[self._score](q0, q1, *score_data)
         bc_loss = 0.5 * k * (bc0 + bc1)
 
         return score, bc_loss
+
+    def _vcn_score(self, q0, q1):
+        """Variational committor network loss function."""
+        return (q0 - q1) ** 2 / (2 * self._lag_time)
+
+    def _svcn_score(self, q0, q1, dd, da, db, ad, bd, ab_ba):
+        """Stopped variational committor network loss function."""
+        return (
+            dd * (q1 - q0) ** 2
+            + da * (q0 - 0) ** 2
+            + db * (q0 - 1) ** 2
+            + ad * (q1 - 0) ** 2
+            + bd * (q1 - 1) ** 2
+            + ab_ba
+        ) / (2 * self._lag_time)
 
     def fit(
         self,
