@@ -77,10 +77,20 @@ class VCN(nn.Module):
         self._step = 0
         self._save_model_interval = save_model_interval
         self._save_models = []
+        self._training_steps = []
+        self._validation_steps = []
         self._training_scores = []
         self._validation_scores = []
         self._training_bc_losses = []
         self._validation_bc_losses = []
+
+    @property
+    def training_steps(self):
+        return np.array(self._training_steps)
+
+    @property
+    def validation_steps(self):
+        return np.array(self._validation_steps)
 
     @property
     def training_scores(self):
@@ -242,6 +252,7 @@ class VCN(nn.Module):
         loss = score + bc_loss
         loss.backward()
         self._optimizer.step()
+        self._training_steps.append(self._step)
         self._training_scores.append(score.item())
         self._training_bc_losses.append(bc_loss.item())
         return score.item(), bc_loss.item()
@@ -252,6 +263,7 @@ class VCN(nn.Module):
         with torch.no_grad():
             score = 0.0
             bc_loss = 0.0
+            n_samples = 0
             for batch in progress(
                 validation_loader,
                 desc="validation",
@@ -261,8 +273,10 @@ class VCN(nn.Module):
                 score_batch, bc_loss_batch = self._loss_fns(batch)
                 score += torch.sum(score_batch).item()
                 bc_loss += torch.sum(bc_loss_batch).item()
-            score /= len(validation_loader)
-            bc_loss /= len(validation_loader)
+                n_samples += len(score_batch)
+            score /= n_samples
+            bc_loss /= n_samples
+            self._validation_steps.append(self._step)
             self._validation_scores.append(score)
             self._validation_bc_losses.append(bc_loss)
         return score, bc_loss
