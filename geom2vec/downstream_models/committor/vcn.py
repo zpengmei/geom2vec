@@ -12,6 +12,30 @@ from tqdm import tqdm
 class VCN(nn.Module):
     r"""
     Variational committor network for estimating the committor function.
+
+    Parameters
+    ----------
+    lobe
+        Neural network.
+    score
+        Score function to use. Can be 'vcn' (variational committor network) or 'svcn' (stopped variational committor network). Defaults to 'vcn'.
+    optimizer
+        Name of optimizer.
+    device
+        Device to use.
+    learning_rate
+        Optimizer learning rate.
+    weight_decay
+        Optimizer weight decay.
+    epsilon
+        Neural network output is restrained to ``-epsilon`` at the reactant and ``1 + epsilon`` at the product.
+    k
+        Penalty for boundary conditions.
+    lag_time
+        Dataset lag time.
+    save_model_interval
+        Interval at which to save the model.
+
     """
 
     def __init__(
@@ -34,6 +58,7 @@ class VCN(nn.Module):
         self._learning_rate = learning_rate
         self._weight_decay = weight_decay
         self._device = torch.device(device)
+        self._score = score
         self._epsilon = epsilon
         self._k = k
         self._lag_time = lag_time
@@ -131,16 +156,22 @@ class VCN(nn.Module):
 
         Parameters
         ----------
-        train_loader: training data loader. Should yield batches of time-lagged
-            data with shape (2, n_batch, n_dim), in_A, and in_B
-        n_epochs: number of epochs (passes through the data set)
-        validation_loader: validation data loader
+        train_loader
+            Training data loader.
+        n_epochs
+            Number of epochs (passes through the data set).
+        validation_loader
+            Validation data loader.
         progress
-        train_patience: number of steps to wait for training loss to improve
-        valid_patience: number of steps to wait for validation loss to improve
+            `tqdm` or similar object (progress bar).
+        train_patience
+            Number of steps to wait for training loss to improve
+        valid_patience
+            Number of steps to wait for validation loss to improve
 
         Returns
         -------
+        self
 
         """
         self._step = 0
@@ -202,6 +233,7 @@ class VCN(nn.Module):
         return self
 
     def _training_step(self, batch):
+        """Training step on one minibatch."""
         self._lobe.train()
         self._optimizer.zero_grad()
         score, bc_loss = self._loss_fns(batch)
@@ -214,7 +246,8 @@ class VCN(nn.Module):
         self._training_bc_losses.append(bc_loss.item())
         return score.item(), bc_loss.item()
 
-    def _validation_loop(self, validation_loader, progress=tqdm):
+    def _validation_loop(self, validation_loader: DataLoader, progress=tqdm):
+        """Validation loop over the validation dataset."""
         self._lobe.eval()
         with torch.no_grad():
             score = 0.0
@@ -234,7 +267,22 @@ class VCN(nn.Module):
             self._validation_bc_losses.append(bc_loss)
         return score, bc_loss
 
-    def transform(self, dataset, batch_size):
+    def transform(self, dataset, batch_size: int) -> np.ndarray:
+        """
+        Predict the committor on the data.
+
+        Parameters
+        ----------
+        dataset
+            Prediction dataset.
+        batch_size
+            Maximum batch size for the neural network.
+
+        Returns
+        -------
+        Predicted committor.
+
+        """
         model = self._lobe
         device = self._device
 
@@ -248,12 +296,14 @@ class VCN(nn.Module):
                 out_list.append(q.cpu())
         return torch.cat(out_list).numpy()
 
-    def fetch_model(self):
+    def fetch_model(self) -> nn.Module:
+        """Return a copy of the neural network (lobe)."""
         from copy import deepcopy
 
         return deepcopy(self._lobe)
 
-    def save_model(self, path, name="lobe.pt"):
+    def save_model(self, path: str, name: str = "lobe.pt") -> nn.Module:
+        """Save the model."""
         import os
 
         torch.save(self._lobe.state_dict(), os.path.join(path, name))
