@@ -114,7 +114,7 @@ class VCN(nn.Module):
 
         u = model(x)
         q = torch.where(a, 0, torch.where(b, 1, torch.clamp(u, 0, 1)))
-        bc = a * (u - (0 - eps)) ** 2 + b * (u - (1 + eps)) ** 2
+        bc = (u - torch.where(a, -eps, torch.where(b, 1 + eps, q))) ** 2
 
         q0, q1 = torch.unflatten(q, 0, (2, -1))
         bc0, bc1 = torch.unflatten(bc, 0, (2, -1))
