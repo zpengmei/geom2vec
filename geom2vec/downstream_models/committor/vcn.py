@@ -80,14 +80,18 @@ class VCN(nn.Module):
         lag_time = self._lag_time
 
         batch = [tensor.to(device) for tensor in batch]
-        x, a, b = batch
+        x0, x1, a0, a1, b0, b1 = batch
+
+        x = torch.cat([x0, x1])
+        a = torch.cat([a0, a1])
+        b = torch.cat([b0, b1])
 
         u = model(x)
         q = torch.where(a, 0, torch.where(b, 1, torch.clamp(u, 0, 1)))
         bc = a * (u - (0 - eps)) ** 2 + b * (u - (1 + eps)) ** 2
 
-        q0, q1 = q
-        bc0, bc1 = bc
+        q0, q1 = torch.unflatten(q, 0, (2, -1))
+        bc0, bc1 = torch.unflatten(bc, 0, (2, -1))
 
         score = (q0 - q1) ** 2 / (2 * lag_time)
         bc_loss = 0.5 * k * (bc0 + bc1)
