@@ -61,6 +61,8 @@ class VCN(nn.Module):
         self._save_models = []
         self._training_scores = []
         self._validation_scores = []
+        self._training_bc_losses = []
+        self._validation_bc_losses = []
 
     @property
     def training_scores(self):
@@ -69,6 +71,14 @@ class VCN(nn.Module):
     @property
     def validation_scores(self):
         return np.array(self._validation_scores)
+
+    @property
+    def training_bc_losses(self):
+        return np.array(self._training_bc_losses)
+
+    @property
+    def validation_bc_losses(self):
+        return np.array(self._validation_bc_losses)
 
     def _variational_loss(self, x, ina, inb):
         r"""
@@ -158,7 +168,8 @@ class VCN(nn.Module):
                 loss.backward()
                 optimizer.step()
 
-                self._training_scores.append(loss_var.item() + loss_boundary.item())
+                self._training_scores.append(loss_var.item())
+                self._training_bc_losses.append(loss_boundary.item())
 
                 if loss.item() < best_train_score:
                     best_train_score = loss.item()
@@ -177,7 +188,8 @@ class VCN(nn.Module):
                     with torch.no_grad():
                         model.eval()
 
-                        losses = []
+                        scores = []
+                        bc_losses = []
                         for data, ina, inb in progress(
                             validation_loader,
                             desc="validation",
@@ -191,9 +203,12 @@ class VCN(nn.Module):
                             loss_var, loss_boundary = self._variational_loss(
                                 q, ina, inb
                             )
-                            losses.append(loss_var.item() + loss_boundary.item())
-                        mean_score = np.mean(losses)
+                            scores.append(loss_var.item())
+                            bc_losses.append(loss_boundary.item())
+                        mean_score = np.mean(scores)
+                        mean_bc_loss = np.mean(bc_losses)
                         self._validation_scores.append(mean_score)
+                        self._validation_bc_losses.append(mean_bc_loss)
 
                         if mean_score < best_valid_score:
                             best_valid_score = mean_score
