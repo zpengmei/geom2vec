@@ -282,6 +282,91 @@ class Preprocessing:
 
         return dataset
 
+    def create_committor_dataset(self, data, ina, inb, drop_first=0, drop_last=0):
+        """
+        Create a dataset for committor regression.
+
+        This dataset is also useful for testing predicted committors.
+
+        Note that the target will be nan if the previous or next stopping time is not within the trajectory.
+        To avoid this, set `drop_first` and `drop_last` to a sufficiently large number.
+
+        Parameters
+        ----------
+        data : list or ndarray
+            The original trajectories.
+        ina : list or ndarray
+            The initial condition.
+        inb : list or ndarray
+            The final condition.
+        drop_first : int, default=0
+            Number of frames to drop from the start of each trajectory.
+        drop_last : int, default=0
+            Number of frames to drop from the last of each trajectory.
+
+        Returns
+        -------
+        dataset : list
+            List of tuples: the length of the list represents the number of data.
+            Each tuple has 4 elements: data frame, initial condition, final condition, target.
+
+        """
+        assert len(data) == len(ina) == len(inb)
+
+        data = self._seq_trajs(data)
+        ina = self._seq_trajs(ina)
+        inb = self._seq_trajs(inb)
+
+        num_trajs = len(data)
+        dataset = []
+
+        for k in range(num_trajs):
+            L_all = data[k].shape[0]
+
+            assert ina[k].shape == inb[k].shape == (L_all, 1)
+
+            data_traj = data[k]
+
+            if self._torch_or_numpy == "numpy":
+                from .util import backward_stop, forward_stop
+
+                ina_traj = ina[k].astype(bool)
+                inb_traj = inb[k].astype(bool)
+                assert not np.any(np.logical_and(ina_traj, inb_traj))
+
+                ind_traj = np.logical_not(np.logical_or(ina_traj, inb_traj))
+                r = backward_stop(ind_traj[:, 0])
+                s = forward_stop(ind_traj[:, 0])
+
+                target_r = np.full((L_all, 1), np.nan, dtype=np.float32)
+                target_s = np.full((L_all, 1), np.nan, dtype=np.float32)
+
+                target_r[r >= 0] = inb_traj[r[r >= 0]]
+                target_s[s < L_all] = inb_traj[s[s < L_all]]
+
+            else:
+                from .util import backward_stop_torch, forward_stop_torch
+
+                ina_traj = ina[k].bool()
+                inb_traj = inb[k].bool()
+                assert not torch.any(torch.logical_and(ina_traj, inb_traj))
+
+                ind_traj = torch.logical_not(torch.logical_or(ina_traj, inb_traj))
+                r = backward_stop_torch(ind_traj[:, 0])
+                s = forward_stop_torch(ind_traj[:, 0])
+
+                target_r = torch.full((L_all, 1), np.nan, dtype=torch.float32)
+                target_s = torch.full((L_all, 1), np.nan, dtype=torch.float32)
+
+                target_r[r >= 0] = inb_traj[r[r >= 0]]
+                target_s[s < L_all] = inb_traj[s[s < L_all]]
+
+            for i in range(drop_first, L_all - drop_last):
+                dataset.append(data_traj[i], ina_traj[i], inb_traj[i], target_r[i])
+                dataset.append(data_traj[i], ina_traj[i], inb_traj[i], target_s[i])
+
+        return dataset
+
     def create_time_lagged_stop_dataset(self, data, ina, inb, lag_time):
         """Create a time-lagged dataset for the boundary condition with stopped time.
 
