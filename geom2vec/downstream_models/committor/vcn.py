@@ -128,8 +128,8 @@ class VCN(nn.Module):
 
         """
         self._step = 0
-        best_train_score = 0
-        best_valid_score = 0
+        best_train_score = torch.inf
+        best_valid_score = torch.inf
         train_patience_counter = 0
         valid_patience_counter = 0
         step_counter = 0
