@@ -2,9 +2,9 @@ from typing import Optional
 
 import numpy as np
 import torch
-import torch.nn as nn
-from grokfast_pytorch import GrokFastAdamW
 from adam_atan2_pytorch import AdamAtan2
+from grokfast_pytorch import GrokFastAdamW
+from torch import nn, optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -17,15 +17,16 @@ class VCN(nn.Module):
     def __init__(
         self,
         lobe: nn.Module,
+        *,
         optimizer: str = "adam",
         device: str = "cuda",
         learning_rate: float = 5e-4,
-        weight_decay: float = 0,
+        weight_decay: float = 0.0,
         epsilon: float = 1e-1,
-        k: float = 10,
+        k: float = 10.0,
         save_model_interval: Optional[int] = None,
     ):
-        super(VCN, self).__init__()
+        super().__init__()
 
         self._lobe = lobe
         self._learning_rate = learning_rate
@@ -33,28 +34,16 @@ class VCN(nn.Module):
         self._epsilon = epsilon
         self._k = k
 
-        assert optimizer in ["adam", "adamw", "sgd", "grokfastadamw", "adamatan2"]
-
-        if optimizer == "adam":
-            self._optimizer = torch.optim.Adam(
-                self.parameters(), lr=learning_rate, weight_decay=weight_decay
-            )
-        elif optimizer == "adamw":
-            self._optimizer = torch.optim.AdamW(
-                self.parameters(), lr=learning_rate, weight_decay=weight_decay
-            )
-        elif optimizer == "sgd":
-            self._optimizer = torch.optim.SGD(
-                self.parameters(), lr=learning_rate, weight_decay=weight_decay
-            )
-        elif optimizer == "grokfastadamw":
-            self._optimizer = GrokFastAdamW(
-                self.parameters(), lr=learning_rate, weight_decay=weight_decay
-            )
-        elif optimizer == "adamatan2":
-            self._optimizer = AdamAtan2(
-                self.parameters(), lr=learning_rate, weight_decay=weight_decay
-            )
+        optimizer_types = {
+            "adam": optim.Adam,
+            "adamw": optim.AdamW,
+            "sgd": optim.SGD,
+            "grokfastadamw": GrokFastAdamW,
+            "adamatan2": AdamAtan2,
+        }
+        self._optimizer = optimizer_types[optimizer](
+            self.parameters(), lr=learning_rate, weight_decay=weight_decay
+        )
 
         self._step = 0
         self._save_model_interval = save_model_interval
@@ -110,6 +99,7 @@ class VCN(nn.Module):
     def fit(
         self,
         train_loader: DataLoader,
+        *,
         n_epochs: int = 1,
         validation_loader: Optional[DataLoader] = None,
         progress=tqdm,
@@ -135,11 +125,11 @@ class VCN(nn.Module):
 
         """
         self._step = 0
+
         best_train_score = torch.inf
         best_valid_score = torch.inf
         train_patience_counter = 0
         valid_patience_counter = 0
-        step_counter = 0
         best_lobe_state = self._lobe.state_dict()
 
         for epoch in progress(
@@ -147,14 +137,14 @@ class VCN(nn.Module):
         ):
             optimizer = self._optimizer
             model = self._lobe
-            k = self._k
 
             for data, ina, inb in progress(
                 train_loader, desc="batch", total=len(train_loader), leave=False
             ):
+                self._step += 1
+
                 model.train()
 
-                step_counter += 1
                 optimizer.zero_grad()
                 data = data.to(self._device)
                 ina = ina.to(self._device)
@@ -169,19 +159,19 @@ class VCN(nn.Module):
                 self._training_scores.append(loss_var.item())
                 self._training_bc_losses.append(loss_boundary.item())
 
+                # early stopping on training loss
+                train_patience_counter += 1
                 if loss.item() < best_train_score:
                     best_train_score = loss.item()
                     train_patience_counter = 0
-                else:
-                    train_patience_counter += 1
-                    if train_patience_counter >= train_patience:
-                        print(f"Training patience reached at epoch {epoch}")
-                        self._lobe.load_state_dict(best_lobe_state)
-                        return self
+                if train_patience_counter >= train_patience:
+                    print(f"Training patience reached at epoch {epoch}")
+                    self._lobe.load_state_dict(best_lobe_state)
+                    return self
 
                 if (
                     validation_loader is not None
-                    and step_counter % train_valid_interval == 0
+                    and self._step % train_valid_interval == 0
                 ):
                     with torch.no_grad():
                         model.eval()
@@ -208,22 +198,22 @@ class VCN(nn.Module):
                         self._validation_scores.append(mean_score)
                         self._validation_bc_losses.append(mean_bc_loss)
 
+                        # early stopping on validation score
+                        valid_patience_counter += 1
                         if mean_score < best_valid_score:
                             best_valid_score = mean_score
                             valid_patience_counter = 0
                             best_lobe_state = self._lobe.state_dict()
-                        else:
-                            valid_patience_counter += 1
-                            if valid_patience_counter >= valid_patience:
-                                print(f"Validation patience reached at epoch {epoch}")
-                                self._lobe.load_state_dict(best_lobe_state)
-                                return self
+                        if valid_patience_counter >= valid_patience:
+                            print(f"Validation patience reached at epoch {epoch}")
+                            self._lobe.load_state_dict(best_lobe_state)
+                            return self
 
                     if self._save_model_interval is not None:
                         if (epoch + 1) % self._save_model_interval == 0:
                             # save the model with the epoch and the mean score
                             self._save_models.append(
-                                (epoch, mean_score, model.state_dict())
+                                (epoch, mean_score, mean_bc_loss, model.state_dict())
                             )
 
         self._lobe.load_state_dict(best_lobe_state)
@@ -233,7 +223,6 @@ class VCN(nn.Module):
         model = self._lobe
         model.eval()
         device = self._device
-        model.to(device)
 
         out_list = []
         with torch.no_grad():

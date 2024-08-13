@@ -4,11 +4,12 @@ import numpy as np
 import torch
 from adam_atan2_pytorch import AdamAtan2
 from grokfast_pytorch import GrokFastAdamW
+from torch import nn, optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 
-class SVCN(torch.nn.Module):
+class SVCN(nn.Module):
     r"""
     Stopped variational committor networks for estimating the committor function.
 
@@ -16,15 +17,15 @@ class SVCN(torch.nn.Module):
 
     def __init__(
         self,
-        lobe: torch.nn.Module,
+        lobe: nn.Module,
         *,
         optimizer: str = "adam",
         device: str = "cuda",
         learning_rate: float = 5e-4,
-        weight_decay: float = 0,
+        weight_decay: float = 0.0,
         epsilon: float = 1e-1,
-        k: float = 10,
-        lag_time: float = 1,
+        k: float = 10.0,
+        lag_time: float = 1.0,
         save_model_interval: Optional[int] = None,
     ):
         super().__init__()
@@ -37,28 +38,16 @@ class SVCN(torch.nn.Module):
         self._k = k
         self._lag_time = lag_time
 
-        assert optimizer in ["adam", "adamw", "sgd", "grokfastadamw", "adamatan2"]
-
-        if optimizer == "adam":
-            self._optimizer = torch.optim.Adam(
-                self.parameters(), lr=learning_rate, weight_decay=weight_decay
-            )
-        elif optimizer == "adamw":
-            self._optimizer = torch.optim.AdamW(
-                self.parameters(), lr=learning_rate, weight_decay=weight_decay
-            )
-        elif optimizer == "sgd":
-            self._optimizer = torch.optim.SGD(
-                self.parameters(), lr=learning_rate, weight_decay=weight_decay
-            )
-        elif optimizer == "grokfastadamw":
-            self._optimizer = GrokFastAdamW(
-                self.parameters(), lr=learning_rate, weight_decay=weight_decay
-            )
-        elif optimizer == "adamatan2":
-            self._optimizer = AdamAtan2(
-                self.parameters(), lr=learning_rate, weight_decay=weight_decay
-            )
+        optimizer_types = {
+            "adam": optim.Adam,
+            "adamw": optim.AdamW,
+            "sgd": optim.SGD,
+            "grokfastadamw": GrokFastAdamW,
+            "adamatan2": AdamAtan2,
+        }
+        self._optimizer = optimizer_types[optimizer](
+            self.parameters(), lr=learning_rate, weight_decay=weight_decay
+        )
 
         self._step = 0
         self._save_model_interval = save_model_interval
@@ -119,6 +108,7 @@ class SVCN(torch.nn.Module):
     def fit(
         self,
         train_loader: DataLoader,
+        *,
         n_epochs: int = 1,
         validation_loader: Optional[DataLoader] = None,
         progress=tqdm,
@@ -140,9 +130,10 @@ class SVCN(torch.nn.Module):
             for batch in progress(
                 train_loader, desc="batch", total=len(train_loader), leave=False
             ):
+                self._step += 1
+
                 score, bc_loss = self._training_step(batch)
                 loss = score + bc_loss
-                self._step += 1
 
                 # early stopping on training loss
                 train_patience_counter += 1
