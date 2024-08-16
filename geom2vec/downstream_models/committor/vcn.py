@@ -55,13 +55,24 @@ class VCN(nn.Module):
         self._score = score
         self._lag_time = lag_time
 
-        optimizer_types = {
-            "adam": optim.Adam,
-            "adamw": optim.AdamW,
-            "sgd": optim.SGD,
-            "grokfastadamw": GrokFastAdamW,
-            "adamatan2": AdamAtan2,
+        self.optimizer_types = {
+            "Adam": torch.optim.Adam,
+            "AdamW": torch.optim.AdamW,
+            "SGD": torch.optim.SGD,
+            "RMSprop": torch.optim.RMSprop,
         }
+        if optimizer == "GrokFastAdamW":
+            from grokfast_pytorch import GrokFastAdamW
+            self.optimizer_types["GrokFastAdamW"] = GrokFastAdamW
+        elif optimizer == "AdamAtan2":
+            from adam_atan2_pytorch import AdamAtan2
+            self.optimizer_types["AdamAtan2"] = AdamAtan2
+
+        if optimizer not in self.optimizer_types.keys():
+            raise ValueError(
+                f"Unknown optimizer type, supported types are {self.optimizer_types.keys()}"
+            )
+
         self._optimizer = optimizer_types[optimizer](
             self.parameters(), lr=learning_rate, weight_decay=weight_decay
         )
