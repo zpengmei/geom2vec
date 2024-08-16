@@ -100,6 +100,7 @@ def infer_traj(
         device: torch.device,
         saving_path: str,
         batch_size: int = 32,
+        sum_or_mean: str = "sum",
         cg_mapping: np.ndarray = None,
         atom_mask: np.ndarray = None,
         cg_mask: np.ndarray = None,
@@ -122,6 +123,10 @@ def infer_traj(
         The path to save the inferred data.
     - cg_mapping: ndarray, default = None
         The coarse-grained mapping to be used.
+    - batch_size: int, default = 32
+        The batch size to be used for inference.
+    - sum_or_mean: str, default = 'sum'
+        The type of aggregation to be used for the atoms.
     - atom_mask: ndarray, default = None
         The mask of the atoms for the inference to save the data.
     - cg_mask: ndarray, default = None
@@ -173,20 +178,22 @@ def infer_traj(
                     atom_rep = atom_rep[:, atom_mask, :]
 
                 if cg_mapping is not None:
-                    cg_rep = scatter(atom_rep, cg_map, dim=1, reduce="add")
+                    if sum_or_mean == "mean":
+                        cg_rep = scatter(atom_rep, cg_map, dim=1, reduce="mean")
+                    else:
+                        cg_rep = scatter(atom_rep, cg_map, dim=1, reduce="add")
                     if cg_mask is not None:
-                        cg_rep = cg_rep[
-                                 :,
-                                 cg_mask,
-                                 :,
-                                 ]
+                        cg_rep = cg_rep[:, cg_mask, :, :]
 
                     cg_rep.detach().cpu()
                     out_list.append(cg_rep)
                     continue
 
                 atom_rep = atom_rep.detach().cpu()
-                out_list.append(atom_rep.sum(dim=1))
+                if sum_or_mean == "mean":
+                    out_list.append(atom_rep.mean(dim=1))
+                else:
+                    out_list.append(atom_rep.sum(dim=1))
                 torch.cuda.empty_cache()
 
             # concatenate the output batches
@@ -324,7 +331,7 @@ def extract_mdtraj_info(md_traj_object, exclude_hydrogens=True):
     atomic_numbers = np.array(atomic_numbers)
     residue_indices = [atom.residue.index for atom in md_traj_object.top.atoms]
     residue_indices = np.array(residue_indices)
-    positions = md_traj_object.xyz * 10 # Convert to angstroms
+    positions = md_traj_object.xyz * 10  # Convert to angstroms
 
     hydrogen_mask = np.array(atomic_numbers) == 1
 
