@@ -1,7 +1,5 @@
 import numpy as np
 import torch
-from grokfast_pytorch import GrokFastAdamW
-from adam_atan2_pytorch import AdamAtan2
 from tqdm import *
 
 from .dataprocessing import Postprocessing_vamp
@@ -224,30 +222,35 @@ class VAMPNet:
 
         self._step = 0
         self._save_models = []
+
         self.optimizer_types = {
             "Adam": torch.optim.Adam,
             "AdamW": torch.optim.AdamW,
             "SGD": torch.optim.SGD,
             "RMSprop": torch.optim.RMSprop,
-            "GrokFastAdamW": GrokFastAdamW,
-            "AdamAtan2": AdamAtan2,
         }
+        if optimizer == "GrokFastAdamW":
+            from grokfast_pytorch import GrokFastAdamW
+            self.optimizer_types["GrokFastAdamW"] = GrokFastAdamW
+        elif optimizer == "AdamAtan2":
+            from adam_atan2_pytorch import AdamAtan2
+            self.optimizer_types["AdamAtan2"] = AdamAtan2
+
         if optimizer not in self.optimizer_types.keys():
             raise ValueError(
                 f"Unknown optimizer type, supported types are {self.optimizer_types.keys()}"
             )
+        if self._lobe_lagged is None:
+            self._optimizer = self.optimizer_types[optimizer](
+                self._lobe.parameters(), lr=learning_rate, weight_decay=weight_decay
+            )
         else:
-            if self._lobe_lagged is None:
-                self._optimizer = self.optimizer_types[optimizer](
-                    self._lobe.parameters(), lr=learning_rate, weight_decay=weight_decay
-                )
-            else:
-                self._optimizer = self.optimizer_types[optimizer](
-                    list(self._lobe.parameters())
-                    + list(self._lobe_lagged.parameters()),
-                    lr=learning_rate,
-                    weight_decay=weight_decay,
-                )
+            self._optimizer = self.optimizer_types[optimizer](
+                list(self._lobe.parameters())
+                + list(self._lobe_lagged.parameters()),
+                lr=learning_rate,
+                weight_decay=weight_decay,
+            )
 
         self._training_scores = []
         self._validation_scores = []
