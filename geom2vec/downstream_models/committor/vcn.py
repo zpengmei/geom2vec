@@ -84,6 +84,14 @@ class VCN(nn.Module):
         self._training_bc_losses = []
         self._validation_bc_losses = []
 
+        # early stopping
+        self._best_train_score = torch.inf
+        self._best_valid_score = torch.inf
+        self._train_patience_counter = 0
+        self._valid_patience_counter = 0
+
+        self._best_lobe_state = self._lobe.state_dict()
+
     @property
     def training_steps(self):
         return np.array(self._training_steps)
@@ -184,14 +192,54 @@ class VCN(nn.Module):
         self
 
         """
-        self._step = 0
+        self.partial_fit(
+            train_loader,
+            n_epochs=n_epochs,
+            validation_loader=validation_loader,
+            progress=progress,
+            train_patience=train_patience,
+            valid_patience=valid_patience,
+            train_valid_interval=train_valid_interval,
+        )
+        self._lobe.load_state_dict(self._best_lobe_state)
+        return self
 
-        best_train_score = torch.inf
-        best_valid_score = torch.inf
-        train_patience_counter = 0
-        valid_patience_counter = 0
-        best_lobe_state = self._lobe.state_dict()
+    def partial_fit(
+        self,
+        train_loader: DataLoader,
+        *,
+        n_epochs: int = 1,
+        validation_loader: Optional[DataLoader] = None,
+        progress=tqdm,
+        train_patience: int = 1000,
+        valid_patience: int = 1000,
+        train_valid_interval: int = 1000,
+    ):
+        r"""
+        Fit the committor network to the training data.
 
+        Unlike `fit`, `partial_fit` does not load the checkpoint with the best validation score.
+
+        Parameters
+        ----------
+        train_loader
+            Training data loader.
+        n_epochs
+            Number of epochs (passes through the data set).
+        validation_loader
+            Validation data loader.
+        progress
+            `tqdm` or similar object (progress bar).
+        train_patience
+            Number of steps to wait for training loss to improve
+        valid_patience
+            Number of steps to wait for validation loss to improve
+
+        Returns
+        -------
+        self
+
+        """
         for epoch in progress(
             range(n_epochs), desc="epoch", total=n_epochs, leave=False
         ):
@@ -211,13 +259,12 @@ class VCN(nn.Module):
                         )
 
                 # early stopping on training loss
-                train_patience_counter += 1
-                if loss < best_train_score:
-                    best_train_score = loss
-                    train_patience_counter = 0
-                if train_patience_counter >= train_patience:
+                self._train_patience_counter += 1
+                if loss < self._best_train_score:
+                    self._best_train_score = loss
+                    self._train_patience_counter = 0
+                if self._train_patience_counter >= train_patience:
                     print(f"Training patience reached at epoch {epoch}")
-                    self._lobe.load_state_dict(best_lobe_state)
                     return self
 
                 if (
@@ -229,17 +276,15 @@ class VCN(nn.Module):
                     )
 
                     # early stopping on validation score
-                    valid_patience_counter += 1
-                    if score < best_valid_score:
-                        best_valid_score = score
-                        valid_patience_counter = 0
-                        best_lobe_state = self._lobe.state_dict()
-                    if valid_patience_counter >= valid_patience:
+                    self._valid_patience_counter += 1
+                    if score < self._best_valid_score:
+                        self._best_valid_score = score
+                        self._valid_patience_counter = 0
+                        self._best_lobe_state = self._lobe.state_dict()
+                    if self._valid_patience_counter >= valid_patience:
                         print(f"Validation patience reached at epoch {epoch}")
-                        self._lobe.load_state_dict(best_lobe_state)
                         return self
 
-        self._lobe.load_state_dict(best_lobe_state)
         return self
 
     def _training_step(self, batch):
