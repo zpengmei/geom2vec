@@ -1,6 +1,9 @@
+from typing import Optional, Any
+
 import numpy as np
 import torch
-from tqdm import *
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from .dataprocessing import Postprocessing_vamp
 from .utils import estimate_koopman_matrix, map_data_to_tensor
@@ -108,7 +111,7 @@ class VAMPNet_Model:
         return self._lobe_lagged
 
     def transform(
-            self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
+        self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
     ):
         """Transform the data through the trained networks.
 
@@ -135,14 +138,14 @@ class VAMPNet_Model:
 
         output = []
         for data_tensor in map_data_to_tensor(
-                data, device=self._device, dtype=self._dtype
+            data, device=self._device, dtype=self._dtype
         ):
             # revise to batching for large data
             # batching first
             batch_list = []
             batch_size = batch_size
             for i in tqdm(range(0, data_tensor.shape[0], batch_size)):
-                data = data_tensor[i: i + batch_size]
+                data = data_tensor[i : i + batch_size]
                 data = data.to(device=self._device)
                 batch_list.append(net(data).detach().cpu().numpy())
             output.append(np.concatenate(batch_list, axis=0))
@@ -165,41 +168,40 @@ class VAMPNet:
 
     Parameters
     ----------
-    lobe : torch.nn.Module
+    lobe
         A neural network model which maps the input data to the basis functions.
-    lobe_lagged : torch.nn.Module, optional, default = None
+    lobe_lagged
         Neural network model for timelagged data, in case of None the lobes are shared (structure and weights).
-    optimizer : str, default = 'Adam'
+    optimizer
         The type of optimizer used for training.
-    device : torch.device, default = None
+    device
         The device on which the torch modules are executed.
-    learning_rate : float, default = 5e-4
+    learning_rate
         The learning rate of the optimizer.
-    epsilon : float, default = 1e-6
+    epsilon
         The strength of the regularization/truncation under which matrices are inverted.
-    method : str, default = 'vamp-2'
+    method
         The methods to be applied for training.
-        'vamp-2': VAMP-2 score.
-    mode : str, default = 'regularize'
+    mode
         'regularize': regularize the eigenvalues by adding epsilon.
         'trunc': truncate the eigenvalues by filtering out the eigenvalues below epsilon.
-    dtype : dtype, default = np.float32
+    dtype
         The data type of the input data and the parameters of the model.
     """
 
     def __init__(
-            self,
-            lobe,
-            lobe_lagged=None,
-            optimizer="Adam",
-            device=None,
-            learning_rate=5e-4,
-            epsilon=1e-6,
-            weight_decay=0,
-            mode="regularize",
-            symmetrized=False,
-            dtype=np.float32,
-            save_model_interval=None,
+        self,
+        lobe: torch.nn.Module,
+        lobe_lagged: Optional[torch.nn.Module] = None,
+        optimizer: str = "Adam",
+        device: torch.device = None,
+        learning_rate: float = 5e-4,
+        epsilon: float = 1e-6,
+        weight_decay: float = 0,
+        mode: str = "regularize",
+        symmetrized: bool = False,
+        dtype=np.float32,
+        save_model_interval=None,
     ):
         self._lobe = lobe
         self._lobe_lagged = lobe_lagged
@@ -231,9 +233,11 @@ class VAMPNet:
         }
         if optimizer == "GrokFastAdamW":
             from grokfast_pytorch import GrokFastAdamW
+
             self.optimizer_types["GrokFastAdamW"] = GrokFastAdamW
         elif optimizer == "AdamAtan2":
             from adam_atan2_pytorch import AdamAtan2
+
             self.optimizer_types["AdamAtan2"] = AdamAtan2
 
         if optimizer not in self.optimizer_types.keys():
@@ -246,18 +250,27 @@ class VAMPNet:
             )
         else:
             self._optimizer = self.optimizer_types[optimizer](
-                list(self._lobe.parameters())
-                + list(self._lobe_lagged.parameters()),
+                list(self._lobe.parameters()) + list(self._lobe_lagged.parameters()),
                 lr=learning_rate,
                 weight_decay=weight_decay,
             )
 
+        self._training_steps = []
+        self._validation_steps = []
         self._training_scores = []
         self._validation_scores = []
 
         self._estimator = VAMPNet_Estimator(
             epsilon=self._epsilon, mode=self._mode, symmetrized=self._symmetrized
         )
+
+    @property
+    def training_steps(self):
+        return np.array(self._training_steps)
+
+    @property
+    def validation_steps(self):
+        return np.array(self._validation_steps)
 
     @property
     def training_scores(self):
@@ -299,6 +312,7 @@ class VAMPNet:
 
         self._optimizer.step()
         self._training_scores.append((-loss).item())
+        self._training_steps.append(self._step)
         self._step += 1
 
         return self, loss
@@ -330,48 +344,48 @@ class VAMPNet:
         return score
 
     def fit(
-            self,
-            train_loader,
-            n_epochs=1,
-            validation_loader=None,
-            progress=tqdm,
-            train_patience=1000,
-            valid_patience=1000,
-            train_valid_interval=1000,
+        self,
+        train_loader: DataLoader,
+        n_epochs: int = 1,
+        validation_loader: Optional[DataLoader] = None,
+        progress: Any = tqdm,
+        train_patience: int = 1000,
+        valid_patience: int = 1000,
+        train_valid_interval: int = 1000,
     ):
         """Performs fit on data.
 
         Parameters
         ----------
-        train_loader : torch.utils.data.DataLoader
+        train_loader
             Yield a tuple of batches representing instantaneous and time-lagged samples for training.
-        n_epochs : int, default=1
+        n_epochs
             The number of epochs (i.e., passes through the training data) to use for training.
-        validation_loader : torch.utils.data.DataLoader, optional, default=None
+        validation_loader
              Yield a tuple of batches representing instantaneous and time-lagged samples for validation.
-        progress : context manager, default=tqdm
+        progress
 
         Returns
         -------
-        self : VAMPNet
+        self
         """
 
         self._step = 0
+
         best_train_score = 0
         best_valid_score = 0
         train_patience_counter = 0
         valid_patience_counter = 0
-        step_counter = 0
 
         best_lobe_state = self._lobe.state_dict()
         if self._lobe_lagged is not None:
             best_lobe_lagged_state = self._lobe_lagged.state_dict()
 
         for epoch in progress(
-                range(n_epochs), desc="epoch", total=n_epochs, leave=False
+            range(n_epochs), desc="epoch", total=n_epochs, leave=False
         ):
             for batch_0, batch_1 in tqdm(train_loader):
-                step_counter += 1
+                self._step += 1
                 _, loss = self.partial_fit(
                     (batch_0.to(device=self._device), batch_1.to(device=self._device))
                 )
@@ -390,8 +404,8 @@ class VAMPNet:
                         return self
 
                 if (
-                        validation_loader is not None
-                        and step_counter % train_valid_interval == 0
+                    validation_loader is not None
+                    and self._step % train_valid_interval == 0
                 ):
                     with torch.no_grad():
                         for val_batch_0, val_batch_1 in validation_loader:
@@ -403,6 +417,7 @@ class VAMPNet:
                             )
 
                         mean_score = self._estimator.output_mean_score()
+                        self._validation_steps.append(self._step)
                         self._validation_scores.append(mean_score.item())
                         self._estimator.clear()
 
@@ -440,7 +455,7 @@ class VAMPNet:
         return self
 
     def transform(
-            self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
+        self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
     ):
         """Transform the data through the trained networks.
 
@@ -516,18 +531,18 @@ class VAMPNet:
         yield data_t, data_t_lagged
 
     def step_trainer(
-            self,
-            train_trajectory,
-            valid_trajectory=None,
-            valid_loader=None,
-            num_steps=1000,
-            batch_size=10000,
-            lag_time=1,
-            progress=tqdm,
-            valid_steps = 100,
-            train_patience=1000,
-            valid_patience=1000,
-            train_valid_interval=1000,
+        self,
+        train_trajectory,
+        valid_trajectory=None,
+        valid_loader=None,
+        num_steps=1000,
+        batch_size=10000,
+        lag_time=1,
+        progress=tqdm,
+        valid_steps=100,
+        train_patience=1000,
+        valid_patience=1000,
+        train_valid_interval=1000,
     ):
         """Performs fit on data.
 
@@ -547,21 +562,23 @@ class VAMPNet:
         """
 
         self._step = 0
+
         best_train_score = 0
         best_valid_score = 0
         train_patience_counter = 0
         valid_patience_counter = 0
-        step_counter = 0
 
         best_lobe_state = self._lobe.state_dict()
         if self._lobe_lagged is not None:
             best_lobe_lagged_state = self._lobe_lagged.state_dict()
 
         for step in progress(
-                range(num_steps), desc="epoch", total=num_steps, leave=False
+            range(num_steps), desc="epoch", total=num_steps, leave=False
         ):
-            for batch_0, batch_1 in self._traj_sampler(train_trajectory, batch_size, lag_time):
-                step_counter += 1
+            for batch_0, batch_1 in self._traj_sampler(
+                train_trajectory, batch_size, lag_time
+            ):
+                self._step += 1
                 _, loss = self.partial_fit(
                     (batch_0.to(device=self._device), batch_1.to(device=self._device))
                 )
@@ -580,13 +597,16 @@ class VAMPNet:
                         return self
 
                 if (
-                        valid_trajectory is not None or valid_loader is not None
-                        and step_counter % train_valid_interval == 0
+                    valid_trajectory is not None
+                    or valid_loader is not None
+                    and self._step % train_valid_interval == 0
                 ):
                     with torch.no_grad():
                         if valid_trajectory is not None:
                             valid_step_counter = 0
-                            for val_batch_0, val_batch_1 in self._traj_sampler(valid_trajectory, batch_size, lag_time):
+                            for val_batch_0, val_batch_1 in self._traj_sampler(
+                                valid_trajectory, batch_size, lag_time
+                            ):
                                 self.validate(
                                     (
                                         val_batch_0.to(device=self._device),
@@ -597,7 +617,9 @@ class VAMPNet:
                                 if valid_step_counter > valid_steps:
                                     break
                         elif valid_loader is not None:
-                            print("using the validation loader instead of random sampling")
+                            print(
+                                "using the validation loader instead of random sampling"
+                            )
                             for val_batch_0, val_batch_1 in valid_loader:
                                 self.validate(
                                     (
