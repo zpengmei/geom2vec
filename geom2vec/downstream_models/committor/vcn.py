@@ -203,6 +203,13 @@ class VCN(nn.Module):
                 score, bc_loss = self._training_step(batch)
                 loss = score + bc_loss
 
+                if self._save_model_interval is not None:
+                    if self._step % self._save_model_interval == 0:
+                        # save the model with the epoch, the step, and the metrics
+                        self._save_models.append(
+                            (epoch, self._step, score, bc_loss, self._lobe.state_dict())
+                        )
+
                 # early stopping on training loss
                 train_patience_counter += 1
                 if loss < best_train_score:
@@ -231,13 +238,6 @@ class VCN(nn.Module):
                         print(f"Validation patience reached at epoch {epoch}")
                         self._lobe.load_state_dict(best_lobe_state)
                         return self
-
-                    if self._save_model_interval is not None:
-                        if (epoch + 1) % self._save_model_interval == 0:
-                            # save the model with the epoch and the losses
-                            self._save_models.append(
-                                (epoch, score, bc_loss, self._lobe.state_dict())
-                            )
 
         self._lobe.load_state_dict(best_lobe_state)
         return self
