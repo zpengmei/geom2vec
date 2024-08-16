@@ -2,8 +2,6 @@ from typing import Literal, Optional
 
 import numpy as np
 import torch
-from adam_atan2_pytorch import AdamAtan2
-from grokfast_pytorch import GrokFastAdamW
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
