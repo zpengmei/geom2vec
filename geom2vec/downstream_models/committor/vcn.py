@@ -27,10 +27,6 @@ class VCN(nn.Module):
         Optimizer learning rate.
     weight_decay
         Optimizer weight decay.
-    epsilon
-        Neural network output is restrained to ``-epsilon`` at the reactant and ``1 + epsilon`` at the product.
-    k
-        Penalty for boundary conditions.
     lag_time
         Dataset lag time.
     save_model_interval
@@ -47,8 +43,6 @@ class VCN(nn.Module):
         device: str = "cuda",
         learning_rate: float = 5e-4,
         weight_decay: float = 0.0,
-        epsilon: float = 1e-1,
-        k: float = 10.0,
         lag_time: float = 1.0,
         save_model_interval: Optional[int] = None,
     ):
@@ -59,8 +53,6 @@ class VCN(nn.Module):
         self._weight_decay = weight_decay
         self._device = torch.device(device)
         self._score = score
-        self._epsilon = epsilon
-        self._k = k
         self._lag_time = lag_time
 
         optimizer_types = {
@@ -120,36 +112,49 @@ class VCN(nn.Module):
         """Compute the variational and boundary loss functions."""
         model = self._lobe
         device = self._device
-        eps = self._epsilon
-        k = self._k
 
         batch = [tensor.to(device) for tensor in batch]
-        x0, x1, a0, a1, b0, b1, *score_data = batch
+        x0, x1, *score_data = batch
 
         x = torch.cat([x0, x1])
-        a = torch.cat([a0, a1])
-        b = torch.cat([b0, b1])
-
         u = model(x)
-        q = torch.where(a, 0, torch.where(b, 1, torch.clamp(u, 0, 1)))
-        bc = (u - torch.where(a, -eps, torch.where(b, 1 + eps, q))) ** 2
-
-        q0, q1 = torch.unflatten(q, 0, (2, -1))
-        bc0, bc1 = torch.unflatten(bc, 0, (2, -1))
+        u0, u1 = torch.unflatten(u, 0, (2, -1))
 
         score_types = {"vcn": self._vcn_score, "svcn": self._svcn_score}
-        score = score_types[self._score](q0, q1, *score_data)
-        bc_loss = 0.5 * k * (bc0 + bc1)
+        return score_types[self._score](u0, u1, *score_data)
 
+    def _vcn_score(self, u0, u1, a0, a1, b0, b1):
+        """Variational committor network loss function."""
+        q0 = torch.where(a0, 0, torch.where(b0, 1, u0))
+        q1 = torch.where(a1, 0, torch.where(b1, 1, u1))
+        loss = (
+            (q1 - q0) ** 2
+            + a0 * (u0 - 0) ** 2
+            + b0 * (u0 - 1) ** 2
+            + a1 * (u1 - 0) ** 2
+            + b1 * (u1 - 1) ** 2
+        ) / (2 * self._lag_time)
+
+        q0 = torch.clamp(q0, 0, 1)
+        q1 = torch.clamp(q1, 0, 1)
+        score = (q0 - q1) ** 2 / (2 * self._lag_time)
+        bc_loss = loss - score
         return score, bc_loss
 
-    def _vcn_score(self, q0, q1):
-        """Variational committor network loss function."""
-        return (q0 - q1) ** 2 / (2 * self._lag_time)
-
-    def _svcn_score(self, q0, q1, dd, da, db, ad, bd, ab_ba):
+    def _svcn_score(self, u0, u1, a0, a1, b0, b1, dd, da, db, ad, bd, ab_ba):
         """Stopped variational committor network loss function."""
-        return (
+        loss = (
+            dd * (u1 - u0) ** 2
+            + da * (u0 - 0) ** 2
+            + db * (u0 - 1) ** 2
+            + ad * (u1 - 0) ** 2
+            + bd * (u1 - 1) ** 2
+            + ab_ba
+        ) / (2 * self._lag_time)
+
+        q0 = torch.where(a0, 0, torch.where(b0, 1, torch.clamp(u0, 0, 1)))
+        q1 = torch.where(a1, 0, torch.where(b1, 1, torch.clamp(u1, 0, 1)))
+        score = (
             dd * (q1 - q0) ** 2
             + da * (q0 - 0) ** 2
             + db * (q0 - 1) ** 2
@@ -157,6 +162,9 @@ class VCN(nn.Module):
             + bd * (q1 - 1) ** 2
             + ab_ba
         ) / (2 * self._lag_time)
+
+        bc_loss = loss - score
+        return score, bc_loss
 
     def fit(
         self,
