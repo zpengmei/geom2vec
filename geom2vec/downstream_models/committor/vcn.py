@@ -343,6 +343,16 @@ class VCN(nn.Module):
             bc_loss /= n_samples
         return score, bc_loss
 
+    def forward(self, x, a, b):
+        model = self._lobe
+        device = self._device
+        x = x.to(device)
+        a = a.to(device)
+        b = b.to(device)
+        u = model(x)
+        q = torch.where(a, 0, torch.where(b, 1, torch.clamp(u, 0, 1)))
+        return q
+
     def transform(self, dataset, batch_size: int) -> np.ndarray:
         """
         Predict the committor on the data.
@@ -359,18 +369,36 @@ class VCN(nn.Module):
         Predicted committor.
 
         """
-        model = self._lobe
-        device = self._device
-
-        model.eval()
+        self.eval()
         out_list = []
         with torch.no_grad():
-            for batch in tqdm(DataLoader(dataset, batch_size=batch_size)):
-                x, a, b = [tensor.to(device) for tensor in batch]
-                u = model(x)
-                q = torch.where(a, 0, torch.where(b, 1, torch.clamp(u, 0, 1)))
-                out_list.append(q.cpu())
+            for x, a, b in tqdm(DataLoader(dataset, batch_size=batch_size)):
+                out_list.append(self(x, a, b).cpu())
         return torch.cat(out_list).numpy()
+
+    def brier_score(self, test_loader: DataLoader) -> float:
+        """
+        Evaluate the Brier score on test data.
+
+        Parameters
+        ----------
+        test_loader
+            Test data loader.
+
+        Returns
+        -------
+        Brier score.
+
+        """
+        self.eval()
+        with torch.no_grad():
+            total = 0.0
+            n_samples = 0
+            for x, a, b, target in tqdm(test_loader):
+                q = self(x, a, b)
+                total += torch.sum((q - target) ** 2).item()
+                n_samples += len(q)
+            return total / n_samples
 
     def fetch_model(self) -> nn.Module:
         """Return a copy of the neural network (lobe)."""
