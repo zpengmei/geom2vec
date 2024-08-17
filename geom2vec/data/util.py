@@ -46,6 +46,29 @@ def backward_stop(in_domain):
     return np.repeat(t[:-1], np.diff(t))[1:]
 
 
+def count_transition_paths(in_domain, in_reactant, in_product):
+    """
+    Count the number of complete transition paths within the trajectory.
+
+    Parameters
+    ----------
+    in_domain : (n,) ndarray of {bool, int}
+        Whether each frame is in the domain.
+    in_reactant : (n,) ndarray of {bool, int}
+        Whether each frame is in the reactant.
+    in_product : (n,) ndarray of {bool, int}
+        Whether each frame is in the product.
+
+    Returns
+    -------
+    int
+        Number of complete transition paths.
+
+    """
+    (t,) = np.nonzero(np.logical_not(in_domain))
+    return np.sum(in_reactant[t[:-1]] * in_product[t[1:]])
+
+
 def count_transition_paths_windows(in_domain, in_reactant, in_product, lag_time):
     """
     Count the number of complete transition paths within each window.
@@ -168,3 +191,26 @@ def count_transition_paths_windows_torch(in_domain, in_reactant, in_product, lag
     out = final_count[lag_time:] - initial_count[:-lag_time]
     out = torch.maximum(out, torch.tensor(0, dtype=torch.int))
     return out
+
+
+def count_transition_paths_torch(in_domain, in_reactant, in_product):
+    """
+    Count the number of complete transition paths within the trajectory.
+
+    Parameters
+    ----------
+    in_domain : (n,) tensor of {bool, int}
+        Whether each frame is in the domain.
+    in_reactant : (n,) tensor of {bool, int}
+        Whether each frame is in the reactant.
+    in_product : (n,) tensor of {bool, int}
+        Whether each frame is in the product.
+
+    Returns
+    -------
+    int
+        Number of complete transition paths.
+
+    """
+    (t,) = torch.nonzero(torch.logical_not(in_domain), as_tuple=True)
+    return torch.sum(in_reactant[t[:-1]] * in_product[t[1:]])
