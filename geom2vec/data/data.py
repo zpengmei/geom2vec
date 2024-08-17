@@ -358,12 +358,12 @@ class Preprocessing:
                 target_r = torch.full((L_all, 1), np.nan, dtype=torch.float32)
                 target_s = torch.full((L_all, 1), np.nan, dtype=torch.float32)
 
-                target_r[r >= 0] = inb_traj[r[r >= 0]]
-                target_s[s < L_all] = inb_traj[s[s < L_all]]
+                target_r[r >= 0] = inb_traj[r[r >= 0]].float()
+                target_s[s < L_all] = inb_traj[s[s < L_all]].float()
 
             for i in range(drop_first, L_all - drop_last):
-                dataset.append(data_traj[i], ina_traj[i], inb_traj[i], target_r[i])
-                dataset.append(data_traj[i], ina_traj[i], inb_traj[i], target_s[i])
+                dataset.append((data_traj[i], ina_traj[i], inb_traj[i], target_r[i]))
+                dataset.append((data_traj[i], ina_traj[i], inb_traj[i], target_s[i]))
 
         return dataset
 

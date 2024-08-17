@@ -404,7 +404,7 @@ class VCN(nn.Module):
             n_samples = 0
             for x, a, b, target in tqdm(test_loader):
                 q = self(x, a, b)
-                total += torch.sum((q - target) ** 2).item()
+                total += torch.sum((q - target.to(self._device)) ** 2).item()
                 n_samples += len(q)
             return total / n_samples
 
