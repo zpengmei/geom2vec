@@ -251,6 +251,10 @@ class VCN(nn.Module):
                 score, bc_loss = self._training_step(batch)
                 loss = score + bc_loss
 
+                self._training_steps.append(self._step)
+                self._training_scores.append(score)
+                self._training_bc_losses.append(bc_loss)
+
                 if self._save_model_interval is not None:
                     if self._step % self._save_model_interval == 0:
                         # save the model with the epoch, the step, and the metrics
@@ -271,9 +275,11 @@ class VCN(nn.Module):
                     validation_loader is not None
                     and self._step % train_valid_interval == 0
                 ):
-                    score, bc_loss = self._validation_loop(
-                        validation_loader, progress=progress
-                    )
+                    score, bc_loss = self.validate(validation_loader, progress=progress)
+
+                    self._validation_steps.append(self._step)
+                    self._validation_scores.append(score)
+                    self._validation_bc_losses.append(bc_loss)
 
                     # early stopping on validation score
                     self._valid_patience_counter += 1
@@ -297,13 +303,27 @@ class VCN(nn.Module):
         loss = score + bc_loss
         loss.backward()
         self._optimizer.step()
-        self._training_steps.append(self._step)
-        self._training_scores.append(score.item())
-        self._training_bc_losses.append(bc_loss.item())
         return score.item(), bc_loss.item()
 
-    def _validation_loop(self, validation_loader: DataLoader, progress=tqdm):
-        """Validation loop over the validation dataset."""
+    def validate(self, validation_loader: DataLoader, progress=tqdm):
+        """
+        Evaluate the variational loss on validation data.
+
+        Parameters
+        ----------
+        validation_loader
+            Validation data loader.
+        progress
+            `tqdm` or similar object (progress bar).
+
+        Returns
+        -------
+        score
+            Variational loss.
+        bc_loss
+            Loss due to violating boundary conditions.
+
+        """
         self._lobe.eval()
         with torch.no_grad():
             score = 0.0
@@ -321,9 +341,6 @@ class VCN(nn.Module):
                 n_samples += len(score_batch)
             score /= n_samples
             bc_loss /= n_samples
-            self._validation_steps.append(self._step)
-            self._validation_scores.append(score)
-            self._validation_bc_losses.append(bc_loss)
         return score, bc_loss
 
     def transform(self, dataset, batch_size: int) -> np.ndarray:
