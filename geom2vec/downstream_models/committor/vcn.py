@@ -256,7 +256,7 @@ class VCN(nn.Module):
             ):
                 self._step += 1
 
-                score, bc_loss = self._training_step(batch)
+                score, bc_loss = self.training_step(batch)
                 loss = score + bc_loss
 
                 self._training_steps.append(self._step)
@@ -301,7 +301,7 @@ class VCN(nn.Module):
 
         return self
 
-    def _training_step(self, batch):
+    def training_step(self, batch):
         """Training step on one minibatch."""
         self._lobe.train()
         self._optimizer.zero_grad()
