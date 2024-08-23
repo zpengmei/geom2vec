@@ -127,33 +127,19 @@ class VCN(nn.Module):
         """Variational committor network loss function."""
         q0 = torch.where(a0, 0, torch.where(b0, 1, u0))
         q1 = torch.where(a1, 0, torch.where(b1, 1, u1))
-        loss = (
-            (q1 - q0) ** 2
-            + a0 * (u0 - 0) ** 2
+        score = (q0 - q1) ** 2 / (2 * self._lag_time)
+        bc_loss = (
+            a0 * (u0 - 0) ** 2
             + b0 * (u0 - 1) ** 2
             + a1 * (u1 - 0) ** 2
             + b1 * (u1 - 1) ** 2
         ) / (2 * self._lag_time)
-
-        q0 = torch.clamp(q0, 0, 1)
-        q1 = torch.clamp(q1, 0, 1)
-        score = (q0 - q1) ** 2 / (2 * self._lag_time)
-        bc_loss = loss - score
         return score, bc_loss
 
     def _svcn_score(self, u0, u1, a0, a1, b0, b1, dd, da, db, ad, bd, ab_ba):
         """Stopped variational committor network loss function."""
-        loss = (
-            dd * (u1 - u0) ** 2
-            + da * (u0 - 0) ** 2
-            + db * (u0 - 1) ** 2
-            + ad * (u1 - 0) ** 2
-            + bd * (u1 - 1) ** 2
-            + ab_ba
-        ) / (2 * self._lag_time)
-
-        q0 = torch.where(a0, 0, torch.where(b0, 1, torch.clamp(u0, 0, 1)))
-        q1 = torch.where(a1, 0, torch.where(b1, 1, torch.clamp(u1, 0, 1)))
+        q0 = torch.where(a0, 0, torch.where(b0, 1, u0))
+        q1 = torch.where(a1, 0, torch.where(b1, 1, u1))
         score = (
             dd * (q1 - q0) ** 2
             + da * (q0 - 0) ** 2
@@ -162,8 +148,12 @@ class VCN(nn.Module):
             + bd * (q1 - 1) ** 2
             + ab_ba
         ) / (2 * self._lag_time)
-
-        bc_loss = loss - score
+        bc_loss = (
+            a0 * (u0 - 0) ** 2
+            + b0 * (u0 - 1) ** 2
+            + a1 * (u1 - 0) ** 2
+            + b1 * (u1 - 1) ** 2
+        ) / (2 * self._lag_time)
         return score, bc_loss
 
     def fit(
@@ -358,7 +348,7 @@ class VCN(nn.Module):
         a = a.to(device)
         b = b.to(device)
         u = model(x)
-        q = torch.where(a, 0, torch.where(b, 1, torch.clamp(u, 0, 1)))
+        q = torch.where(a, 0, torch.where(b, 1, u))
         return q
 
     def transform(self, dataset, batch_size: int) -> np.ndarray:
