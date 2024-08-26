@@ -1,7 +1,8 @@
-from typing import Optional, Any
+from typing import Optional, Any, Sequence, Union, Tuple
 
 import numpy as np
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -72,9 +73,9 @@ class VAMPNet_Model:
 
     Parameters
     ----------
-    lobe : torch.nn.Module
+    lobe : nn.Module
         A neural network model which maps the input data to the basis functions.
-    lobe_lagged : torch.nn.Module, optional, default = None
+    lobe_lagged : nn.Module, optional, default = None
         Neural network model for timelagged data, in case of None the lobes are shared (structure and weights).
     device : torch device, default = None
         The device on which the torch modules are executed.
@@ -168,31 +169,31 @@ class VAMPNet:
 
     Parameters
     ----------
-    lobe
+    lobe : nn.Module
         A neural network model which maps the input data to the basis functions.
-    lobe_lagged
+    lobe_lagged : Optional[nn.Module], default = None
         Neural network model for timelagged data, in case of None the lobes are shared (structure and weights).
-    optimizer
+    optimizer : str, default = "Adam"
         The type of optimizer used for training.
-    device
+    device : torch.device, default = None
         The device on which the torch modules are executed.
-    learning_rate
+    learning_rate : float, default = 5e-4
         The learning rate of the optimizer.
-    epsilon
+    epsilon : float, default = 1e-6
         The strength of the regularization/truncation under which matrices are inverted.
-    method
+    method : str
         The methods to be applied for training.
-    mode
+    mode : str, default = "regularize"
         'regularize': regularize the eigenvalues by adding epsilon.
         'trunc': truncate the eigenvalues by filtering out the eigenvalues below epsilon.
-    dtype
+    dtype : dtype, default = np.float32
         The data type of the input data and the parameters of the model.
     """
 
     def __init__(
         self,
-        lobe: torch.nn.Module,
-        lobe_lagged: Optional[torch.nn.Module] = None,
+        lobe: nn.Module,
+        lobe_lagged: Optional[nn.Module] = None,
         optimizer: str = "Adam",
         device: torch.device = None,
         learning_rate: float = 5e-4,
@@ -280,7 +281,7 @@ class VAMPNet:
     def validation_scores(self):
         return np.array(self._validation_scores)
 
-    def partial_fit(self, data):
+    def partial_fit(self, data: Sequence[torch.Tensor]):
         """Performs a partial fit on data with gradient accumulation.
 
         Parameters
@@ -497,13 +498,14 @@ class VAMPNet:
         lobe_lagged = deepcopy(self._lobe_lagged)
         return VAMPNet_Model(lobe, lobe_lagged, device=self._device, dtype=self._dtype)
 
-    def fetch_lobe(self):
+    def fetch_lobe(self) -> Union[nn.Module, Tuple[nn.Module, nn.Module]]:
+        from copy import deepcopy
         if self._lobe_lagged is not None:
-            return self._lobe, self._lobe_lagged
+            return deepcopy(self._lobe), deepcopy(self._lobe_lagged)
         else:
-            return self._lobe
+            return deepcopy(self._lobe)
 
-    def save_model(self, path, name="lobe.pt", name_lagged="lobe_lagged.pt"):
+    def save_model(self, path, name="lobe.pt", name_lagged="lobe_lagged.pt") -> Tuple[nn.Module, nn.Module]:
         import os
 
         torch.save(self._lobe.state_dict(), os.path.join(path, name))
@@ -513,7 +515,30 @@ class VAMPNet:
 
         return self._lobe, self._lobe_lagged
 
-    def _traj_sampler(self, traj, batch_size, lag_time):
+    def _traj_sampler(self, traj: Any, batch_size: int, lag_time: int):
+        """
+        Samples batches from a trajectory for training or validation.
+
+        This method generates batches of data from a given trajectory, considering
+        the specified lag time. It ensures that the sampled data points are
+        properly time-lagged.
+
+        Parameters
+        ----------
+        traj
+            The input trajectory to sample from.
+        batch_size
+            The number of samples in each batch.
+        lag_time
+            The time lag between instantaneous and time-lagged samples.
+
+        Yields
+        ------
+        tuple
+            A tuple containing two arrays:
+            - data_t: Instantaneous data samples (shape: (batch_size, feature_dim))
+            - data_t_lagged: Time-lagged data samples (shape: (batch_size, feature_dim))
+        """
         traj_len = traj.shape[0]
         if traj_len < lag_time:
             raise ValueError("Trajectory length is smaller than the lag time")
