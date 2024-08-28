@@ -291,17 +291,36 @@ class VCN(nn.Module):
 
         return self
 
-    def training_step(self, batch):
-        """Training step on one minibatch."""
+    def training_step(self, *batches):
+        """
+        Perform a single optimization step.
+
+        Parameters
+        ----------
+        *batches
+            Minibatches of training data. Gradient accumulation is performed if more than one batch is provided.
+
+        """
         self._lobe.train()
         self._optimizer.zero_grad()
-        score, bc_loss = self._loss_fns(batch)
-        score = torch.mean(score)
-        bc_loss = torch.mean(bc_loss)
-        loss = score + bc_loss
-        loss.backward()
+
+        score = 0.0
+        bc_loss = 0.0
+
+        for batch in batches:
+            score_batch, bc_loss_batch = self._loss_fns(batch)
+            score_batch = torch.mean(score_batch) / len(batches)
+            bc_loss_batch = torch.mean(bc_loss_batch) / len(batches)
+
+            loss = score_batch + bc_loss_batch
+            loss.backward()
+
+            score += score_batch.item()
+            bc_loss += bc_loss_batch.item()
+
         self._optimizer.step()
-        return score.item(), bc_loss.item()
+
+        return score, bc_loss
 
     def validate(self, validation_loader: DataLoader, progress=tqdm):
         """
