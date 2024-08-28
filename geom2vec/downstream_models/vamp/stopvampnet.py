@@ -1,164 +1,26 @@
-from typing import Optional, Callable
+from typing import Callable, Optional
 
-import torch
 import numpy as np
-from tqdm import *
+import torch
+from tqdm import tqdm
 
 from .dataprocessing import Postprocessing_stopvamp
-from .utils import estimate_koopman_matrix, map_data_to_tensor
+from .model import BaseVAMPNet_Model, VAMPNet_Estimator
 
 
-class VAMPNet_Estimator:
-    def __init__(self, epsilon, mode, symmetrized):
-        self._score = None
-        self._score_list = []
+class StopVAMPNet_Model(BaseVAMPNet_Model):
+    """StopVAMPNet model for VAMP with stopping times.
 
-        self._epsilon = epsilon
-        self._mode = mode
-        self._symmetrized = symmetrized
-        self._is_fitted = False
+    Extends BaseVAMPNet_Model to implement StopVAMPNet algorithm.
 
-    @property
-    def loss(self):
-        if not self._is_fitted:
-            raise ValueError("please fit the model first")
-        else:
-            return -self._score
-
-    @property
-    def score(self):
-        if not self._is_fitted:
-            raise ValueError("please fit the model first")
-        else:
-            return self._score
-
-    def fit(self, data):
-        assert len(data) == 3
-        # data[0] is the instantaneous data
-        # data[1] is the time-lagged data
-        # data[2] is the ind_stop data
-
-        koopman = estimate_koopman_matrix(
-            data[0],
-            data[1],
-            epsilon=self._epsilon,
-            mode=self._mode,
-            symmetrized=self._symmetrized,
-            ind_stop=data[2],
-        )
-        self._score = torch.pow(torch.norm(koopman, p="fro"), 2) + 1
-        self._is_fitted = True
-
-        return self
-
-    def save(self):
-        with torch.no_grad():
-            self._score_list.append(self.score)
-
-        return self
-
-    def clear(self):
-        self._score_list = []
-
-        return self
-
-    def output_mean_score(self):
-        mean_score = torch.mean(torch.stack(self._score_list))
-
-        return mean_score
-
-
-class VAMPNet_Model:
-    """The VAMPNet model from VAMPNet estimator.
-
-    Parameters
-    ----------
-    lobe : torch.nn.Module
-        A neural network model which maps the input data to the basis functions.
-    lobe_lagged : torch.nn.Module, optional, default = None
-        Neural network model for timelagged data, in case of None the lobes are shared (structure and weights).
-    device : torch device, default = None
-        The device on which the torch modules are executed.
-    dtype : dtype, default = np.float32
-        The data type of the input data and the parameters of the model.
+    Methods:
+        _transform_to_cv: Transforms output to collective variables using StopVAMP postprocessing.
     """
 
-    def __init__(self, lobe, lobe_lagged=None, device=None, dtype=np.float32):
-        self._lobe = lobe
-        if dtype == np.float32:
-            self._lobe = self._lobe.float()
-        elif dtype == np.float64:
-            self._lobe = self._lobe.double()
-        if lobe_lagged is not None:
-            self._lobe_lagged = lobe_lagged
-            if dtype == np.float32:
-                self._lobe_lagged = self._lobe_lagged.float()
-            elif dtype == np.float64:
-                self._lobe_lagged = self._lobe_lagged.double()
-
-        self._dtype = dtype
-        self._device = device
-
-    @property
-    def lobe(self):
-        return self._lobe
-
-    @property
-    def lobe_lagged(self):
-        if self._lobe_lagged is None:
-            raise ValueError(
-                "There is only one neural network for both time-instant and time-lagged data"
-            )
-        return self._lobe_lagged
-
-    def transform(
-        self, data, instantaneous=True, return_cv=False, lag_time=None, batch_size=200
-    ):
-        """Transform the data through the trained networks.
-
-        Parameters
-        ----------
-        data : list or tuple or ndarray
-            The data to be transformed.
-        instantaneous : boolean, default = True
-            Whether to use the instantaneous lobe or the time-lagged lobe for transformation.
-            Note that only VAMPNet method requires two lobes
-
-        Returns
-        -------
-        output : array_like
-            List of numpy array or numpy array containing transformed data.
-        """
-        if instantaneous or self._lobe_lagged is None:
-            self._lobe.eval()
-            net = self._lobe
-        else:
-            self._lobe_lagged.eval()
-            net = self._lobe_lagged
-
-        output = []
-        for data_tensor in map_data_to_tensor(
-            data, device=self._device, dtype=self._dtype
-        ):
-            # revise to batching for large data
-            # batching first
-            batch_list = []
-            batch_size = batch_size
-            for i in tqdm(range(0, data_tensor.shape[0], batch_size)):
-                data = data_tensor[i : i + batch_size]
-                data = data.to(device=self._device)
-                batch_list.append(net(data).detach().cpu().numpy())
-            output.append(np.concatenate(batch_list, axis=0))
-
-        if not return_cv:
-            return output if len(output) > 1 else output[0]
-        else:
-            if lag_time is None:
-                raise ValueError("Please input the lag time for transformation to CVs")
-            else:
-                post = Postprocessing_stopvamp(lag_time=lag_time, dtype=self._dtype)
-                output_cv = post.fit_transform(output, instantanuous=instantaneous)
-            return output_cv if len(output_cv) > 1 else output_cv[0]
+    def _transform_to_cv(self, output, lag_time, instantaneous):
+        post = Postprocessing_stopvamp(lag_time=lag_time, dtype=self._dtype)
+        output_cv = post.fit_transform(output, instantaneous=instantaneous)
+        return output_cv if len(output_cv) > 1 else output_cv[0]
 
 
 class StopVAMPNet:
@@ -479,12 +341,12 @@ class StopVAMPNet:
             batch_size=batch_size,
         )
 
-    def fetch_model(self) -> VAMPNet_Model:
+    def fetch_model(self) -> StopVAMPNet_Model:
         """Yields the current model.
 
         Returns
         -------
-        VAMPNet_Model :
+        StopVAMPNet_Model :
             The VAMPNet model from VAMPNet estimator.
         """
 
@@ -492,7 +354,9 @@ class StopVAMPNet:
 
         lobe = deepcopy(self._lobe)
         lobe_lagged = deepcopy(self._lobe_lagged)
-        return VAMPNet_Model(lobe, lobe_lagged, device=self._device, dtype=self._dtype)
+        return StopVAMPNet_Model(
+            lobe, lobe_lagged, device=self._device, dtype=self._dtype
+        )
 
     def save_model(self, path, name="lobe.pt", name_lagged="lobe_lagged.pt"):
         import os
