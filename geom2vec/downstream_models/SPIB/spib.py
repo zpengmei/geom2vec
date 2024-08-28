@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Optional, Any, Sequence, Union, Tuple
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 import torch
 import torch.nn as nn
@@ -8,9 +8,39 @@ import torch.nn.functional as F
 from ...layers.mlps import MLP
 
 
+class SPIBDataset(Dataset):
+    def __init__(self, data, data_weights, time_lagged_data, time_lagged_labels):
+        self.data = data
+        self.data_weights = data_weights
+        self.time_lagged_labels = time_lagged_labels
+        self.time_lagged_data = time_lagged_data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx], self.data_weights[idx], self.time_lagged_labels[idx]
+
+    def update_labels(self, new_labels):
+        if not isinstance(new_labels, torch.Tensor):
+            new_labels = torch.tensor(new_labels)
+
+        # Update the labels directly in-place
+        self.time_lagged_labels[:] = new_labels
+
+
 class SPIB(nn.Module):
     """
     Initialize the state autoencoder model for geom2vec-spib
+    @article{wang2021state,
+      title={State predictive information bottleneck},
+      author={Wang, Dedi and Tiwary, Pratyush},
+      journal={The Journal of Chemical Physics},
+      volume={154},
+      number={13},
+      year={2021},
+      publisher={AIP Publishing}
+    }
 
     Args:
         prior_model: The prior model for the latent space.
@@ -215,7 +245,7 @@ class SPIB(nn.Module):
 
         return log_p
 
-    def reset_representative(self, representative_inputs):
+    def _reset_representative(self, representative_inputs):
 
         # reset the nuber of representative inputs
         self.output_channels = representative_inputs.shape[0]
@@ -251,31 +281,15 @@ class SPIB(nn.Module):
 
         return loss, reconstruction_error.detach().cpu().data, kl_loss.detach().cpu().data
 
-    def _init_logs(self):
-        self.training_loss = []
-        self.training_reconst_loss = []
-        self.training_kl_loss = []
-        self.validation_loss = []
-        self.validation_reconst_loss = []
-        self.validation_kl_loss = []
-        self.state_labels_history = []
-        self.state_change_history = []
-
-        self._step = 0
-
     @torch.no_grad()
     def _infer_new_labels(self, time_lagged_data, batch_size):
         if self.UpdateLabel:
             labels = []
 
-            for i in range(0, len(time_lagged_data), batch_size):
-                batch_inputs = time_lagged_data[i:i+batch_size]
-
-                # pass through VAE
-                z_mean, z_logvar = self.encode(batch_inputs)
+            batch_list = torch.split(time_lagged_data, batch_size)
+            for batch in batch_list:
+                z_mean, z_logvar = self.encode(batch)
                 log_prediction = self.decode(z_mean)
-
-                # label = p/Z
                 labels += [log_prediction.exp()]
 
             labels = torch.cat(labels, dim=0)
@@ -283,11 +297,52 @@ class SPIB(nn.Module):
             labels = F.one_hot(max_pos, num_classes=self.output_channels)
 
             return labels
+
     @torch.no_grad()
-    def update_model(self,data,data_weights):
-        pass
+    def update_model(self, data, data_weights, data_labels, test_data_labels, batch_size, threshold=0.0):
+        mean_rep = []
+        batch_list = torch.split(data, batch_size)
+        for batch in batch_list:
+            z_mean, _ = self.encode(batch)
+            mean_rep.append(z_mean)
+
+        mean_rep = torch.cat(mean_rep, dim=0)
+        state_population = data_labels.sum(dim=0).float() / data_labels.shape[0]
+
+        # ignore states whose state_population is smaller than threshold to speed up the convergence
+        # By default, the threshold is set to be zero
+        train_data_labels = data_labels[:, state_population > threshold]
+        test_data_labels = test_data_labels[:, state_population > threshold]
+
+        representative_inputs = []
+        for i in range(train_data_labels.shape[-1]):
+            weights = data_weights[train_data_labels[:, i].bool()].reshape(-1, 1)
+            center_z = ((weights * mean_rep[train_data_labels[:, i].bool()]).sum(dim=0) / weights.sum()).reshape(1, -1)
+            # find the one cloest to center_z as representative-inputs
+            dist = torch.square(mean_rep - center_z).sum(dim=-1)
+            index = torch.argmin(dist)
+            representative_inputs += [data[index].reshape(1, -1)]
+
+        representative_inputs = torch.cat(representative_inputs, dim=0)
+        self._reset_representative(representative_inputs)
+        self.reset_representative(representative_inputs)
+
+        # record the old parameters
+        w = self.cls_output[0].weight[state_population > threshold]
+        b = self.cls_output[0].bias[state_population > threshold]
+
+        # reset the dimension of the output
+        self.cls_output = nn.Sequential(
+            nn.Linear(self.neuron_num2, self.output_dim),
+            nn.LogSoftmax(dim=1))
+
+        self.cls_output[0].weight = nn.Parameter(w.to(self.device))
+        self.cls_output[0].bias = nn.Parameter(b.to(self.device))
+
+        return train_data_labels, test_data_labels
 
     def _log_model_params(self):
+        rep_z_mean, rep_z_logvar = self.get_rep_z()
         self.model_params = {
             "graph_model": self.graph_model.state_dict(),
             "encoder": self.encoder.state_dict(),
@@ -299,6 +354,8 @@ class SPIB(nn.Module):
             "idle_input": self.idle_input,
             "bottleneck_channels": self.bottleneck_channels,
             "output_channels": self.output_channels,
+            "rep_z_mean": rep_z_mean,
+            "rep_z_logvar": rep_z_logvar,
         }
 
     def _restore_model_params(self):
@@ -310,13 +367,24 @@ class SPIB(nn.Module):
         self.enc_logvar = self.model_params["enc_logvar"]
         self.rep_weights.load_state_dict(self.model_params["rep_weights"])
 
+    def _init_logs(self):
+        self.training_loss = []
+        self.training_reconst_loss = []
+        self.training_kl_loss = []
+        self.validation_loss = []
+        self.validation_reconst_loss = []
+        self.validation_kl_loss = []
+        self.state_labels_history = []
+        self.state_change_history = []
+        self.convergence_history = []
+        self._step = 0
+
     def fit(
             self,
             train_dataset,
             val_dataset,
             batch_size: int = 5000,
             max_updates: int = 15,
-            tolerance: float = 1e-2,
             n_epochs: int = 1,
             progress: Any = tqdm,
             mask_threshold: float = 0.0,
@@ -351,7 +419,9 @@ class SPIB(nn.Module):
         train_patience_counter = 0
         valid_patience_counter = 0
 
-        init_state_pop = (torch.sum(train_dataset.time_lagged_labels, dim=0).float() / train_dataset.time_lagged_labels.shape[0]).cpu()
+        init_state_pop = (
+                torch.sum(train_dataset.time_lagged_labels, dim=0).float() / train_dataset.time_lagged_labels.shape[
+            0]).cpu()
         self.state_labels_history.append(init_state_pop.numpy())
 
         train_dataset = SPIBDataset(train_dataset[0], train_dataset[1], train_dataset[2], train_dataset[3])
@@ -384,7 +454,7 @@ class SPIB(nn.Module):
                     if train_patience_counter > train_patience:
                         print("Early stopping due to no improvement in training loss.")
                         self._restore_model_params()
-                        return self
+                        break
 
                 if (
                         validation_loader is not None
@@ -406,11 +476,13 @@ class SPIB(nn.Module):
                             if valid_patience_counter > valid_patience:
                                 print("Early stopping due to no improvement in validation loss.")
                                 self._restore_model_params()
-                                return self
+                                # break the loop
+                                break
 
                         new_train_labels = self._infer_new_labels(train_dataset.time_lagged_data, batch_size)
                         train_dataset.update_labels(new_train_labels)
-                        state_population = (torch.sum(new_train_labels, dim=0).float()/new_train_labels.shape[0]).cpu()
+                        state_population = (
+                                torch.sum(new_train_labels, dim=0).float() / new_train_labels.shape[0]).cpu()
                         self.state_labels_history.append(state_population.numpy())
                         print(f"State population: {state_population.numpy()}")
                         # print the relative state population change
@@ -434,36 +506,27 @@ class SPIB(nn.Module):
                             val_labels.to(self.device)
 
                             print('Updated labels')
+                            train_labels, val_labels = self.update_model(train_dataset.data,
+                                                                         train_dataset.data_weights,
+                                                                         train_labels, val_labels,
+                                                                         batch_size, mask_threshold)
+                            train_dataset.update_labels(train_labels)
+                            val_dataset.update_labels(val_labels)
 
+                            init_state_pop = (torch.sum(train_labels, dim=0).float() / val_labels.shape[0]).cpu()
+                            self.state_labels_history.append(init_state_pop.numpy())
 
+                            self.convergence_history += [[update_counter, epoch, self.output_dim]]
 
+        with torch.inference_mode():
+            if self.update_lables:
+                train_labels = self._infer_new_labels(train_dataset.time_lagged_data, batch_size)
+                val_labels = self._infer_new_labels(val_dataset.time_lagged_data, batch_size)
 
+                train_labels, val_labels = self.update_model(train_dataset.data, train_dataset.data_weights,
+                                                             train_labels, val_labels, batch_size, mask_threshold)
 
+                train_dataset.update_labels(train_labels)
+                val_dataset.update_labels(val_labels)
 
-
-
-
-
-
-from torch.utils.data import Dataset
-
-
-class SPIBDataset(Dataset):
-    def __init__(self, data, data_weights, future_data, time_lagged_labels):
-        self.data = data
-        self.data_weights = data_weights
-        self.time_lagged_labels = time_lagged_labels
-        self.time_lagged_data = future_data
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        return self.data[idx], self.data_weights[idx], self.time_lagged_labels[idx]
-
-    def update_labels(self, new_labels):
-        if not isinstance(new_labels, torch.Tensor):
-            new_labels = torch.tensor(new_labels)
-
-        # Update the labels directly in-place
-        self.time_lagged_labels[:] = new_labels
+        return self
