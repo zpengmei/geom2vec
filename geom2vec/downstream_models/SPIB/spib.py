@@ -333,8 +333,9 @@ class SPIB(nn.Module):
 
         # reset the dimension of the output
         self.cls_output = nn.Sequential(
-            nn.Linear(self.neuron_num2, self.output_dim),
-            nn.LogSoftmax(dim=1))
+            nn.Linear(self.intermediate_channels, self.output_channels),
+            nn.Softmax(dim=-1),
+        )
 
         self.cls_output[0].weight = nn.Parameter(w.to(self.device))
         self.cls_output[0].bias = nn.Parameter(b.to(self.device))
@@ -516,7 +517,7 @@ class SPIB(nn.Module):
                             init_state_pop = (torch.sum(train_labels, dim=0).float() / val_labels.shape[0]).cpu()
                             self.state_labels_history.append(init_state_pop.numpy())
 
-                            self.convergence_history += [[update_counter, epoch, self.output_dim]]
+                            self.convergence_history += [[update_counter, epoch, self.output_channels]]
 
         with torch.inference_mode():
             if self.update_lables:
