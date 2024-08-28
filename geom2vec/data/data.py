@@ -55,7 +55,7 @@ class Preprocessing:
 
         Parameters
         ----------
-        data : list or ndarray
+        data : list or ndarray or torch.Tensor
             The original trajectories.
 
         lag_time : int
@@ -78,6 +78,51 @@ class Preprocessing:
             L_re = L_all - lag_time
             for i in range(L_re):
                 dataset.append((data[k][i, :], data[k][i + lag_time, :]))
+
+        return dataset
+
+    def create_time_lagged_state_label_dataset(self, data, data_weights, state_labels, lag_time):
+        """
+        create a time-lagged dataset for SPIB, user provides the input feature and correspoding state labels
+        SPIB take instantaneous data and predict the future state labels
+
+        Args:
+            data: list or ndarray or torch.Tensor
+            state_labels: list or ndarray or torch.Tensor
+            data_weights: list or ndarray or torch.Tensor
+            lag_time: int
+        Returns:
+            dataset: list of tuples, each tuple has two elements: one is the instantaneous data frame,
+            the other is the corresponding time-lagged state labels
+            ((frames, features),(frames, weights),(frames,features),(frames, state_labels))
+
+        """
+        data = self._seq_trajs(data)
+        data_labels = self._seq_trajs(state_labels)
+
+        if data_weights is None: # if no weights are provided, set all weights to 1
+            if self._torch_or_numpy == "numpy":
+                data_weights = [np.ones_like(data_labels[i]) for i in range(len(data_labels))]
+            else:
+                data_weights = [torch.ones_like(data_labels[i]) for i in range(len(data_labels))]
+        data_weights = self._seq_trajs(data_weights)
+
+        # sanity check of the shape
+        print('Checking the shape of the input data and state labels')
+        for i in range(len(data)):
+            print(f'The shape of the input data is {data[i].shape}, '
+                  f'the shape of the state labels is {data_labels[i].shape}',
+                  f'the shape of the weights is {data_weights[i].shape}')
+
+            assert data[i].shape[0] == data_labels[i].shape[0] == data_weights[i].shape[0]
+
+        num_trajs = len(data)
+        dataset = []
+        for k in range(num_trajs):
+            L_all = data[k].shape[0]
+            L_re = L_all - lag_time
+            for i in range(L_re):
+                dataset.append((data[k][i, :], data_weights[k][i, :], data[k][i + lag_time, :], data_labels[k][i + lag_time, :]))
 
         return dataset
 
@@ -575,4 +620,3 @@ class Preprocessing:
             self._torch_or_numpy = "torch"
 
         return data
-
