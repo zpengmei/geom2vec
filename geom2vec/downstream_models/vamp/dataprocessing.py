@@ -93,12 +93,10 @@ class Postprocessing_vac(Preprocessing):
         return self
 
     def _cal_mean(self, data):
-
         dataset = self.create_time_lagged_dataset(data, self._lag_time)
         d0, d1 = map(np.array, zip(*dataset))
 
         mean = (d0.mean(0) + d1.mean(0)) / 2.0
-
 
         return mean
 
@@ -250,7 +248,7 @@ class Postprocessing_vac(Preprocessing):
         modes1_rm = modes1 - np.mean(modes1, axis=0)
 
         corr = np.mean(modes0_rm * modes1_rm, axis=0) / (
-                np.std(modes0_rm, axis=0) * np.std(modes1_rm, axis=0)
+            np.std(modes0_rm, axis=0) * np.std(modes1_rm, axis=0)
         )
 
         return corr
@@ -351,7 +349,6 @@ class Postprocessing_vamp(Preprocessing):
         return self
 
     def _inv_sqrt(self, cov_matrix):
-
         import numpy.linalg
 
         cov_matrix = 0.5 * (cov_matrix + cov_matrix.T)
@@ -569,7 +566,6 @@ class Postprocessing_stopvamp(Preprocessing):
         return self
 
     def _inv_sqrt(self, cov_matrix):
-
         import numpy.linalg
 
         cov_matrix = 0.5 * (cov_matrix + cov_matrix.T)

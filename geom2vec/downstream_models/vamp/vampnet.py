@@ -500,12 +500,15 @@ class VAMPNet:
 
     def fetch_lobe(self) -> Union[nn.Module, Tuple[nn.Module, nn.Module]]:
         from copy import deepcopy
+
         if self._lobe_lagged is not None:
             return deepcopy(self._lobe), deepcopy(self._lobe_lagged)
         else:
             return deepcopy(self._lobe)
 
-    def save_model(self, path, name="lobe.pt", name_lagged="lobe_lagged.pt") -> Tuple[nn.Module, nn.Module]:
+    def save_model(
+        self, path, name="lobe.pt", name_lagged="lobe_lagged.pt"
+    ) -> Tuple[nn.Module, nn.Module]:
         import os
 
         torch.save(self._lobe.state_dict(), os.path.join(path, name))

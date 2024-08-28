@@ -1,6 +1,7 @@
-import numpy as np
+from typing import Optional, Callable
+
 import torch
-from grokfast_pytorch import GrokFastAdamW
+import numpy as np
 from tqdm import *
 
 from .dataprocessing import Postprocessing_stopvamp
@@ -222,36 +223,53 @@ class StopVAMPNet:
 
         self._step = 0
         self._save_models = []
+
         self.optimizer_types = {
             "Adam": torch.optim.Adam,
             "AdamW": torch.optim.AdamW,
             "SGD": torch.optim.SGD,
             "RMSprop": torch.optim.RMSprop,
-            "grokfastadamw": GrokFastAdamW,
         }
+        if optimizer == "GrokFastAdamW":
+            from grokfast_pytorch import GrokFastAdamW
+
+            self.optimizer_types["GrokFastAdamW"] = GrokFastAdamW
+        elif optimizer == "AdamAtan2":
+            from adam_atan2_pytorch import AdamAtan2
+
+            self.optimizer_types["AdamAtan2"] = AdamAtan2
+
         if optimizer not in self.optimizer_types.keys():
             raise ValueError(
                 f"Unknown optimizer type, supported types are {self.optimizer_types.keys()}"
             )
+        if self._lobe_lagged is None:
+            self._optimizer = self.optimizer_types[optimizer](
+                self._lobe.parameters(), lr=learning_rate, weight_decay=weight_decay
+            )
         else:
-            if self._lobe_lagged is None:
-                self._optimizer = self.optimizer_types[optimizer](
-                    self._lobe.parameters(), lr=learning_rate, weight_decay=weight_decay
-                )
-            else:
-                self._optimizer = self.optimizer_types[optimizer](
-                    list(self._lobe.parameters())
-                    + list(self._lobe_lagged.parameters()),
-                    lr=learning_rate,
-                    weight_decay=weight_decay,
-                )
+            self._optimizer = self.optimizer_types[optimizer](
+                list(self._lobe.parameters()) + list(self._lobe_lagged.parameters()),
+                lr=learning_rate,
+                weight_decay=weight_decay,
+            )
 
+        self._training_steps = []
+        self._validation_steps = []
         self._training_scores = []
         self._validation_scores = []
 
         self._estimator = VAMPNet_Estimator(
             epsilon=self._epsilon, mode=self._mode, symmetrized=self._symmetrized
         )
+
+    @property
+    def training_steps(self):
+        return np.array(self._training_steps)
+
+    @property
+    def validation_steps(self):
+        return np.array(self._validation_steps)
 
     @property
     def training_scores(self):
@@ -291,6 +309,7 @@ class StopVAMPNet:
         loss.backward()
         self._optimizer.step()
 
+        self._training_steps.append(self._step)
         self._training_scores.append((-loss).item())
         self._step += 1
 
@@ -317,13 +336,13 @@ class StopVAMPNet:
 
     def fit(
         self,
-        train_loader,
-        n_epochs=1,
-        validation_loader=None,
-        progress=tqdm,
-        train_patience=1000,
-        valid_patience=1000,
-        train_valid_interval=1000,
+        train_loader: torch.utils.data.DataLoader,
+        n_epochs: int = 1,
+        validation_loader: Optional[torch.utils.data.DataLoader] = None,
+        progress: Callable = tqdm,
+        train_patience: int = 1000,
+        valid_patience: int = 1000,
+        train_valid_interval: int = 1000,
     ):
         """Performs fit on data.
 
@@ -352,7 +371,6 @@ class StopVAMPNet:
         best_valid_score = 0
         train_patience_counter = 0
         valid_patience_counter = 0
-        step_counter = 0
 
         best_lobe_state = self._lobe.state_dict()
         if self._lobe_lagged is not None:
@@ -362,7 +380,7 @@ class StopVAMPNet:
             range(n_epochs), desc="epoch", total=n_epochs, leave=False
         ):
             for batch_0, batch_1, ind_stop in tqdm(train_loader):
-                step_counter += 1
+                self._step += 1
                 _, loss = self.partial_fit(
                     (
                         batch_0.to(device=self._device),
@@ -385,7 +403,7 @@ class StopVAMPNet:
 
                 if (
                     validation_loader is not None
-                    and step_counter % train_valid_interval == 0
+                    and self._step % train_valid_interval == 0
                 ):
                     with torch.no_grad():
                         for val_batch_0, val_batch_1, ind_stop in validation_loader:
@@ -398,6 +416,7 @@ class StopVAMPNet:
                             )
 
                         mean_score = self._estimator.output_mean_score()
+                        self._validation_steps.append(self._step)
                         self._validation_scores.append(mean_score.item())
                         self._estimator.clear()
 
