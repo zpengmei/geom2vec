@@ -325,7 +325,7 @@ class SPIB(nn.Module):
 
         representative_inputs = torch.cat(representative_inputs, dim=0)
         self._reset_representative(representative_inputs)
-        self.reset_representative(representative_inputs)
+        self._reset_representative(representative_inputs)
 
         # record the old parameters
         w = self.cls_output[0].weight[state_population > threshold]
