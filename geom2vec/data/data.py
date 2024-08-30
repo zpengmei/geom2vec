@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from copy import copy
+from torch.utils.data import Dataset
 
 
 class Preprocessing:
@@ -114,15 +115,37 @@ class Preprocessing:
                   f'the shape of the state labels is {data_labels[i].shape}',
                   f'the shape of the weights is {data_weights[i].shape}')
 
+            if len(data_labels[i].shape) == 1 or data_labels[i].shape[1] == 1:
+                print('The state labels should be one-hot encoded, please check the shape of the state labels')
+                print('Now we will convert the state labels to one-hot encoding')
+                data_labels[i] = torch.eye(data_labels[i].max() + 1)[data_labels[i]]
+                print(f'The shape of the state labels is {data_labels[i].shape}')
+
             assert data[i].shape[0] == data_labels[i].shape[0] == data_weights[i].shape[0]
 
         num_trajs = len(data)
-        dataset = []
+
+        # dataset = []
+        instant_data = []
+        time_lagged_data = []
+        instant_weights = []
+        time_lagged_labels = []
         for k in range(num_trajs):
             L_all = data[k].shape[0]
             L_re = L_all - lag_time
             for i in range(L_re):
-                dataset.append((data[k][i, :], data_weights[k][i, :], data[k][i + lag_time, :], data_labels[k][i + lag_time, :]))
+                # dataset.append((data[k][i, :], data_weights[k][i], data[k][i + lag_time, :], data_labels[k][i + lag_time]))
+                instant_data.append(data[k][i, :])
+                time_lagged_data.append(data[k][i + lag_time, :])
+                instant_weights.append(data_weights[k][i])
+                time_lagged_labels.append(data_labels[k][i + lag_time])
+
+        instant_data = torch.stack(instant_data)
+        time_lagged_data = torch.stack(time_lagged_data)
+        instant_weights = torch.stack(instant_weights)
+        time_lagged_labels = torch.stack(time_lagged_labels)
+
+        dataset = SPIBDataset(instant_data, instant_weights, time_lagged_data, time_lagged_labels)
 
         return dataset
 
@@ -620,3 +643,24 @@ class Preprocessing:
             self._torch_or_numpy = "torch"
 
         return data
+
+
+class SPIBDataset(Dataset):
+    def __init__(self, data, data_weights, time_lagged_data, time_lagged_labels):
+        self.data = data
+        self.data_weights = data_weights
+        self.time_lagged_labels = time_lagged_labels
+        self.time_lagged_data = time_lagged_data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx], self.data_weights[idx], self.time_lagged_labels[idx]
+
+    def update_labels(self, new_labels):
+        if not isinstance(new_labels, torch.Tensor):
+            new_labels = torch.tensor(new_labels)
+
+        # Update the labels directly in-place
+        self.time_lagged_labels[:] = new_labels
