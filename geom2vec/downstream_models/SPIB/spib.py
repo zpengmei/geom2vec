@@ -1,12 +1,12 @@
 import numpy as np
-from typing import Optional, Any, Sequence, Union, Tuple
-from torch.utils.data import DataLoader, Dataset
+from typing import Optional, Any
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from ...layers.mlps import MLP
-from ...data.data import SPIBDataset
+
 
 class SPIB(nn.Module):
     """
@@ -265,7 +265,7 @@ class SPIB(nn.Module):
 
         # Reconstruction loss is cross-entropy
         # reweighed
-        
+
         reconstruction_error = torch.sum(
             data_weights * torch.sum(-time_lagged_labels * outputs, dim=1)) / data_weights.sum()
 
@@ -289,7 +289,6 @@ class SPIB(nn.Module):
             labels = torch.cat(labels, dim=0)
             max_pos = labels.argmax(1)
             labels = F.one_hot(max_pos, num_classes=self.output_channels)
-
 
             return labels
 
@@ -414,7 +413,6 @@ class SPIB(nn.Module):
         train_patience_counter = 0
         valid_patience_counter = 0
 
-
         init_state_pop = (
                 torch.sum(train_dataset.time_lagged_labels, dim=0).float() / train_dataset.time_lagged_labels.shape[
             0]).cpu()
@@ -528,3 +526,52 @@ class SPIB(nn.Module):
                     val_dataset.update_labels(val_labels)
 
         return self
+
+# from geom2vec.downstream_models.SPIB.spib import SPIB
+# from geom2vec.layers.mlps import MLP
+# from geom2vec.data import Preprocessing
+# import torch
+#
+# preprocess = Preprocessing(torch_or_numpy='torch')
+#
+# traj = torch.randn(10, 1000, 2)
+# labels = torch.randint(0, 10, (10, 1000))
+#
+# # convert to list
+# traj = [traj[i] for i in range(traj.shape[0])]
+# labels = [labels[i] for i in range(labels.shape[0])]
+#
+# spib_dataset = preprocess.create_time_lagged_state_label_dataset(
+#     data = traj,
+#     data_weights = None,
+#     state_labels = labels,
+#     lag_time=10,
+# )
+#
+# prior_encoder = MLP(
+#     input_channels=2,
+#     hidden_channels=16,
+#     out_channels=16,
+#     num_layers=2,
+#     out_activation=None
+# )
+#
+# spib_model = SPIB(
+#     graph_model=prior_encoder,
+#     update_lables=False,
+#     bottleneck_channels=1,
+#     intermediate_channels=16,
+#     output_channels=10,
+#     num_layers=2,
+#     device='cpu',
+#     optimizer='Adam',
+#     learning_rate=1e-4,
+# )
+#
+# spib_model.fit(
+#     train_dataset=spib_dataset,
+#     val_dataset=None,
+#     batch_size=100,
+#     n_epochs=10,
+#     train_valid_interval=1,
+# )
