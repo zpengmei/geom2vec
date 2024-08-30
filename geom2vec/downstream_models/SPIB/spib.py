@@ -6,28 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from ...layers.mlps import MLP
-
-
-class SPIBDataset(Dataset):
-    def __init__(self, data, data_weights, time_lagged_data, time_lagged_labels):
-        self.data = data
-        self.data_weights = data_weights
-        self.time_lagged_labels = time_lagged_labels
-        self.time_lagged_data = time_lagged_data
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        return self.data[idx], self.data_weights[idx], self.time_lagged_labels[idx]
-
-    def update_labels(self, new_labels):
-        if not isinstance(new_labels, torch.Tensor):
-            new_labels = torch.tensor(new_labels)
-
-        # Update the labels directly in-place
-        self.time_lagged_labels[:] = new_labels
-
+from ...data.data import SPIBDataset
 
 class SPIB(nn.Module):
     """
@@ -66,6 +45,8 @@ class SPIB(nn.Module):
             optimizer: str = "adam",
             learning_rate: float = 5e-4,
             weight_decay: float = 0.0,
+            eps: float = 1e-8,
+            beta: float = 1.0,
     ):
         super(SPIB, self).__init__()
 
@@ -86,12 +67,10 @@ class SPIB(nn.Module):
             raise ValueError(
                 f"Unknown optimizer type, supported types are {self.optimizer_types.keys()}"
             )
-        self._optimizer = self.optimizer_types[optimizer](
-            self.parameters(), lr=learning_rate, weight_decay=weight_decay
-        )
 
         self.output_channels = output_channels
         self.bottleneck_channels = bottleneck_channels
+        self.intermediate_channels = intermediate_channels
         self.update_lables = update_lables
 
         self.graph_model = graph_model
@@ -119,12 +98,18 @@ class SPIB(nn.Module):
             nn.Linear(self.output_channels, 1, bias=False),
             nn.Softmax(dim=0)
         )
-        self.register_buffer('representation_inputs', torch.eye(self.output_channels, intermediate_channels),
-                             device=device, requires_grad=False)  # check this, original code has np.prod(data_shape)
+        self.register_buffer('representation_inputs', torch.eye(self.output_channels, intermediate_channels))
+        # check this, original code has np.prod(data_shape)
 
-        self.register_buffer('idle_input', torch.eye(self.output_channels, self.output_channels),
-                             device=device, requires_grad=False)
+        self.register_buffer('idle_input', torch.eye(self.output_channels, self.output_channels))
         self.bottleneck_channels = bottleneck_channels
+
+        self._optimizer = self.optimizer_types[optimizer](
+            self.parameters(), lr=learning_rate, weight_decay=weight_decay
+        )
+        self.eps = eps
+        self.beta = beta
+        self.device = device
         self.to(device)
 
     def get_prior(self, graph_emb: torch.Tensor) -> torch.Tensor:
@@ -231,6 +216,8 @@ class SPIB(nn.Module):
 
         """
         rep_z_mean, rep_z_logvar = self.get_rep_z()
+        # print('self.idle_input:', self.idle_input.shape)
+        # print('self.rep_weights:', self.rep_weights[0])
         w = self.rep_weights(self.idle_input)
         z_expand = z.unsqueeze(1)  # (batch_size, z_dim) -> (batch_size, 1, z_dim)
         rep_mean = rep_z_mean.unsqueeze(
@@ -239,6 +226,9 @@ class SPIB(nn.Module):
         rep_log_q = -0.5 * torch.sum(rep_logvar + torch.pow(z_expand - rep_mean, 2)
                                      / torch.exp(rep_logvar), dim=2)
         if sum_up:
+            # print('representative_log_q:', rep_log_q.shape)
+            # print('w:', w.shape)
+            # print('representative_log_q@w:', (rep_log_q @ w).shape)
             log_p = torch.sum(torch.log(torch.exp(rep_log_q) @ w + self.eps), dim=1)
         else:
             log_p = torch.log(torch.exp(rep_log_q) * w.T + self.eps)
@@ -253,13 +243,16 @@ class SPIB(nn.Module):
         # reset representative weights
         self.idle_input = torch.eye(self.output_channels, self.output_channels, device=self.device, requires_grad=False)
 
-        self.representative_weights = nn.Sequential(
+        self.rep_weights = nn.Sequential(
             nn.Linear(self.output_channels, 1, bias=False),
             nn.Softmax(dim=0))
-        self.representative_weights[0].weight = nn.Parameter(torch.ones([1, self.output_channels], device=self.device))
+
+        self.rep_weights[0].weight = nn.Parameter(torch.ones([1, self.output_channels], device=self.device))
 
         # reset representative inputs
         self.representative_inputs = representative_inputs.clone().detach()
+
+        print('I have reset the representative inputs')
 
     def compute_loss(self, data, time_lagged_labels, data_weights):
 
@@ -272,6 +265,7 @@ class SPIB(nn.Module):
 
         # Reconstruction loss is cross-entropy
         # reweighed
+        
         reconstruction_error = torch.sum(
             data_weights * torch.sum(-time_lagged_labels * outputs, dim=1)) / data_weights.sum()
 
@@ -283,7 +277,7 @@ class SPIB(nn.Module):
 
     @torch.no_grad()
     def _infer_new_labels(self, time_lagged_data, batch_size):
-        if self.UpdateLabel:
+        if self.update_lables:
             labels = []
 
             batch_list = torch.split(time_lagged_data, batch_size)
@@ -295,6 +289,7 @@ class SPIB(nn.Module):
             labels = torch.cat(labels, dim=0)
             max_pos = labels.argmax(1)
             labels = F.one_hot(max_pos, num_classes=self.output_channels)
+
 
             return labels
 
@@ -312,7 +307,8 @@ class SPIB(nn.Module):
         # ignore states whose state_population is smaller than threshold to speed up the convergence
         # By default, the threshold is set to be zero
         train_data_labels = data_labels[:, state_population > threshold]
-        test_data_labels = test_data_labels[:, state_population > threshold]
+        if test_data_labels is not None:
+            test_data_labels = test_data_labels[:, state_population > threshold]
 
         representative_inputs = []
         for i in range(train_data_labels.shape[-1]):
@@ -397,8 +393,6 @@ class SPIB(nn.Module):
 
         Parameters
         ----------
-        train_loader
-            Yield a tuple of batches representing instantaneous and time-lagged state labels for training.
         n_epochs
             The number of epochs (i.e., passes through the training data) to use for training.
         validation_loader
@@ -420,15 +414,16 @@ class SPIB(nn.Module):
         train_patience_counter = 0
         valid_patience_counter = 0
 
+
         init_state_pop = (
                 torch.sum(train_dataset.time_lagged_labels, dim=0).float() / train_dataset.time_lagged_labels.shape[
             0]).cpu()
         self.state_labels_history.append(init_state_pop.numpy())
 
-        train_dataset = SPIBDataset(train_dataset[0], train_dataset[1], train_dataset[2], train_dataset[3])
-        val_dataset = SPIBDataset(val_dataset[0], val_dataset[1], val_dataset[2], val_dataset[3])
-
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        validation_loader = None
+        val_labels = None
+
         if val_dataset is not None:
             validation_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
 
@@ -437,7 +432,7 @@ class SPIB(nn.Module):
         ):
             for batch_0, weight_0, lable_1 in tqdm(train_loader):
                 self._step += 1
-                loss, reconstruction_error, kl_loss = self.calculate_loss(batch_0, lable_1, weight_0)
+                loss, reconstruction_error, kl_loss = self.compute_loss(batch_0, lable_1, weight_0)
                 self._optimizer.zero_grad()
                 loss.backward()
                 self._optimizer.step()
@@ -462,7 +457,7 @@ class SPIB(nn.Module):
                         and self._step % train_valid_interval == 0
                 ):
                     for batch_0, weight_0, lable_1 in tqdm(validation_loader):
-                        loss, reconstruction_error, kl_loss = self.calculate_loss(batch_0, lable_1, weight_0)
+                        loss, reconstruction_error, kl_loss = self.compute_loss(batch_0, lable_1, weight_0)
                         weight_sum = weight_0.sum().cpu()
                         self.validation_loss.append(loss.item() / weight_sum)
                         self.validation_reconst_loss.append(reconstruction_error.item() / weight_sum)
@@ -522,12 +517,14 @@ class SPIB(nn.Module):
         with torch.inference_mode():
             if self.update_lables:
                 train_labels = self._infer_new_labels(train_dataset.time_lagged_data, batch_size)
-                val_labels = self._infer_new_labels(val_dataset.time_lagged_data, batch_size)
+                if val_dataset is not None:
+                    val_labels = self._infer_new_labels(val_dataset.time_lagged_data, batch_size)
 
                 train_labels, val_labels = self.update_model(train_dataset.data, train_dataset.data_weights,
                                                              train_labels, val_labels, batch_size, mask_threshold)
 
                 train_dataset.update_labels(train_labels)
-                val_dataset.update_labels(val_labels)
+                if val_dataset is not None:
+                    val_dataset.update_labels(val_labels)
 
         return self
