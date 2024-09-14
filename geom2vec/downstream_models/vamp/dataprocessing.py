@@ -453,7 +453,7 @@ class Postprocessing_vamp(Preprocessing):
 
         return modes if num_trajs > 1 else modes[0]
 
-    def fit_transform(self, data, instantanuous=True):
+    def fit_transform(self, data, instantaneous=True):
         """Fit the model and transfrom to the slow CVs.
 
         Parameters
@@ -466,7 +466,7 @@ class Postprocessing_vamp(Preprocessing):
             Slow CVs (i.e., dynamic modes).
         """
 
-        modes = self.fit(data).transform(data, instantaneous=instantanuous)
+        modes = self.fit(data).transform(data, instantaneous=instantaneous)
 
         return modes
 
