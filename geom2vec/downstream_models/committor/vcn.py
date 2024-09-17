@@ -25,10 +25,6 @@ class VCN(nn.Module):
         Optimizer learning rate.
     weight_decay
         Optimizer weight decay.
-    epsilon
-        Neural network output is restrained to ``-epsilon`` at the reactant and ``1 + epsilon`` at the product.
-    k
-        Penalty for boundary conditions.
     lag_time
         Dataset lag time.
     save_model_interval
@@ -45,8 +41,6 @@ class VCN(nn.Module):
         device: str = "cuda",
         learning_rate: float = 5e-4,
         weight_decay: float = 0.0,
-        epsilon: float = 1e-1,
-        k: float = 10.0,
         lag_time: float = 1.0,
         save_model_interval: Optional[int] = None,
     ):
@@ -57,8 +51,6 @@ class VCN(nn.Module):
         self._weight_decay = weight_decay
         self._device = torch.device(device)
         self._score = score
-        self._epsilon = epsilon
-        self._k = k
         self._lag_time = lag_time
 
         self.optimizer_types = {
@@ -93,6 +85,14 @@ class VCN(nn.Module):
         self._training_bc_losses = []
         self._validation_bc_losses = []
 
+        # early stopping
+        self._best_train_score = torch.inf
+        self._best_valid_score = torch.inf
+        self._train_patience_counter = 0
+        self._valid_patience_counter = 0
+
+        self._best_lobe_state = self._lobe.state_dict()
+
     @property
     def training_steps(self):
         return np.array(self._training_steps)
@@ -121,36 +121,35 @@ class VCN(nn.Module):
         """Compute the variational and boundary loss functions."""
         model = self._lobe
         device = self._device
-        eps = self._epsilon
-        k = self._k
 
         batch = [tensor.to(device) for tensor in batch]
-        x0, x1, a0, a1, b0, b1, *score_data = batch
+        x0, x1, *score_data = batch
 
         x = torch.cat([x0, x1])
-        a = torch.cat([a0, a1])
-        b = torch.cat([b0, b1])
-
         u = model(x)
-        q = torch.where(a, 0, torch.where(b, 1, torch.clamp(u, 0, 1)))
-        bc = (u - torch.where(a, -eps, torch.where(b, 1 + eps, q))) ** 2
-
-        q0, q1 = torch.unflatten(q, 0, (2, -1))
-        bc0, bc1 = torch.unflatten(bc, 0, (2, -1))
+        u0, u1 = torch.unflatten(u, 0, (2, -1))
 
         score_types = {"vcn": self._vcn_score, "svcn": self._svcn_score}
-        score = score_types[self._score](q0, q1, *score_data)
-        bc_loss = 0.5 * k * (bc0 + bc1)
+        return score_types[self._score](u0, u1, *score_data)
 
+    def _vcn_score(self, u0, u1, a0, a1, b0, b1):
+        """Variational committor network loss function."""
+        q0 = torch.where(a0, 0, torch.where(b0, 1, u0))
+        q1 = torch.where(a1, 0, torch.where(b1, 1, u1))
+        score = (q0 - q1) ** 2 / (2 * self._lag_time)
+        bc_loss = (
+            a0 * (u0 - 0) ** 2
+            + b0 * (u0 - 1) ** 2
+            + a1 * (u1 - 0) ** 2
+            + b1 * (u1 - 1) ** 2
+        ) / (2 * self._lag_time)
         return score, bc_loss
 
-    def _vcn_score(self, q0, q1):
-        """Variational committor network loss function."""
-        return (q0 - q1) ** 2 / (2 * self._lag_time)
-
-    def _svcn_score(self, q0, q1, dd, da, db, ad, bd, ab_ba):
+    def _svcn_score(self, u0, u1, a0, a1, b0, b1, dd, da, db, ad, bd, ab_ba):
         """Stopped variational committor network loss function."""
-        return (
+        q0 = torch.where(a0, 0, torch.where(b0, 1, u0))
+        q1 = torch.where(a1, 0, torch.where(b1, 1, u1))
+        score = (
             dd * (q1 - q0) ** 2
             + da * (q0 - 0) ** 2
             + db * (q0 - 1) ** 2
@@ -158,6 +157,13 @@ class VCN(nn.Module):
             + bd * (q1 - 1) ** 2
             + ab_ba
         ) / (2 * self._lag_time)
+        bc_loss = (
+            a0 * (u0 - 0) ** 2
+            + b0 * (u0 - 1) ** 2
+            + a1 * (u1 - 0) ** 2
+            + b1 * (u1 - 1) ** 2
+        ) / (2 * self._lag_time)
+        return score, bc_loss
 
     def fit(
         self,
@@ -193,14 +199,54 @@ class VCN(nn.Module):
         self
 
         """
-        self._step = 0
+        self.partial_fit(
+            train_loader,
+            n_epochs=n_epochs,
+            validation_loader=validation_loader,
+            progress=progress,
+            train_patience=train_patience,
+            valid_patience=valid_patience,
+            train_valid_interval=train_valid_interval,
+        )
+        self._lobe.load_state_dict(self._best_lobe_state)
+        return self
 
-        best_train_score = torch.inf
-        best_valid_score = torch.inf
-        train_patience_counter = 0
-        valid_patience_counter = 0
-        best_lobe_state = self._lobe.state_dict()
+    def partial_fit(
+        self,
+        train_loader: DataLoader,
+        *,
+        n_epochs: int = 1,
+        validation_loader: Optional[DataLoader] = None,
+        progress=tqdm,
+        train_patience: int = 1000,
+        valid_patience: int = 1000,
+        train_valid_interval: int = 1000,
+    ):
+        r"""
+        Fit the committor network to the training data.
 
+        Unlike `fit`, `partial_fit` does not load the checkpoint with the best validation score.
+
+        Parameters
+        ----------
+        train_loader
+            Training data loader.
+        n_epochs
+            Number of epochs (passes through the data set).
+        validation_loader
+            Validation data loader.
+        progress
+            `tqdm` or similar object (progress bar).
+        train_patience
+            Number of steps to wait for training loss to improve
+        valid_patience
+            Number of steps to wait for validation loss to improve
+
+        Returns
+        -------
+        self
+
+        """
         for epoch in progress(
             range(n_epochs), desc="epoch", total=n_epochs, leave=False
         ):
@@ -209,65 +255,101 @@ class VCN(nn.Module):
             ):
                 self._step += 1
 
-                score, bc_loss = self._training_step(batch)
+                score, bc_loss = self.training_step(batch)
                 loss = score + bc_loss
 
+                self._training_steps.append(self._step)
+                self._training_scores.append(score)
+                self._training_bc_losses.append(bc_loss)
+
+                if self._save_model_interval is not None:
+                    if self._step % self._save_model_interval == 0:
+                        # save the model with the epoch, the step, and the metrics
+                        self._save_models.append(
+                            (epoch, self._step, score, bc_loss, self._lobe.state_dict())
+                        )
+
                 # early stopping on training loss
-                train_patience_counter += 1
-                if loss < best_train_score:
-                    best_train_score = loss
-                    train_patience_counter = 0
-                if train_patience_counter >= train_patience:
+                self._train_patience_counter += 1
+                if loss < self._best_train_score:
+                    self._best_train_score = loss
+                    self._train_patience_counter = 0
+                if self._train_patience_counter >= train_patience:
                     print(f"Training patience reached at epoch {epoch}")
-                    self._lobe.load_state_dict(best_lobe_state)
                     return self
 
                 if (
                     validation_loader is not None
                     and self._step % train_valid_interval == 0
                 ):
-                    score, bc_loss = self._validation_loop(
-                        validation_loader, progress=progress
-                    )
+                    score, bc_loss = self.validate(validation_loader, progress=progress)
+
+                    self._validation_steps.append(self._step)
+                    self._validation_scores.append(score)
+                    self._validation_bc_losses.append(bc_loss)
 
                     # early stopping on validation score
-                    valid_patience_counter += 1
-                    if score < best_valid_score:
-                        best_valid_score = score
-                        valid_patience_counter = 0
-                        best_lobe_state = self._lobe.state_dict()
-                    if valid_patience_counter >= valid_patience:
+                    self._valid_patience_counter += 1
+                    if score < self._best_valid_score:
+                        self._best_valid_score = score
+                        self._valid_patience_counter = 0
+                        self._best_lobe_state = self._lobe.state_dict()
+                    if self._valid_patience_counter >= valid_patience:
                         print(f"Validation patience reached at epoch {epoch}")
-                        self._lobe.load_state_dict(best_lobe_state)
                         return self
 
-                    if self._save_model_interval is not None:
-                        if (epoch + 1) % self._save_model_interval == 0:
-                            # save the model with the epoch and the losses
-                            self._save_models.append(
-                                (epoch, score, bc_loss, self._lobe.state_dict())
-                            )
-
-        self._lobe.load_state_dict(best_lobe_state)
         return self
 
-    def _training_step(self, batch):
-        """Training step on one minibatch."""
+    def training_step(self, *batches):
+        """
+        Perform a single optimization step.
+
+        Parameters
+        ----------
+        *batches
+            Minibatches of training data. Gradient accumulation is performed if more than one batch is provided.
+
+        """
         self._lobe.train()
         self._optimizer.zero_grad()
-        score, bc_loss = self._loss_fns(batch)
-        score = torch.mean(score)
-        bc_loss = torch.mean(bc_loss)
-        loss = score + bc_loss
-        loss.backward()
-        self._optimizer.step()
-        self._training_steps.append(self._step)
-        self._training_scores.append(score.item())
-        self._training_bc_losses.append(bc_loss.item())
-        return score.item(), bc_loss.item()
 
-    def _validation_loop(self, validation_loader: DataLoader, progress=tqdm):
-        """Validation loop over the validation dataset."""
+        score = 0.0
+        bc_loss = 0.0
+
+        for batch in batches:
+            score_batch, bc_loss_batch = self._loss_fns(batch)
+            score_batch = torch.mean(score_batch) / len(batches)
+            bc_loss_batch = torch.mean(bc_loss_batch) / len(batches)
+
+            loss = score_batch + bc_loss_batch
+            loss.backward()
+
+            score += score_batch.item()
+            bc_loss += bc_loss_batch.item()
+
+        self._optimizer.step()
+
+        return score, bc_loss
+
+    def validate(self, validation_loader: DataLoader, progress=tqdm):
+        """
+        Evaluate the variational loss on validation data.
+
+        Parameters
+        ----------
+        validation_loader
+            Validation data loader.
+        progress
+            `tqdm` or similar object (progress bar).
+
+        Returns
+        -------
+        score
+            Variational loss.
+        bc_loss
+            Loss due to violating boundary conditions.
+
+        """
         self._lobe.eval()
         with torch.no_grad():
             score = 0.0
@@ -285,10 +367,17 @@ class VCN(nn.Module):
                 n_samples += len(score_batch)
             score /= n_samples
             bc_loss /= n_samples
-            self._validation_steps.append(self._step)
-            self._validation_scores.append(score)
-            self._validation_bc_losses.append(bc_loss)
         return score, bc_loss
+
+    def forward(self, x, a, b):
+        model = self._lobe
+        device = self._device
+        x = x.to(device)
+        a = a.to(device)
+        b = b.to(device)
+        u = model(x)
+        q = torch.where(a, 0, torch.where(b, 1, u))
+        return q
 
     def transform(self, dataset, batch_size: int) -> np.ndarray:
         """
@@ -306,18 +395,36 @@ class VCN(nn.Module):
         Predicted committor.
 
         """
-        model = self._lobe
-        device = self._device
-
-        model.eval()
+        self.eval()
         out_list = []
         with torch.no_grad():
-            for batch in tqdm(DataLoader(dataset, batch_size=batch_size)):
-                x, a, b = [tensor.to(device) for tensor in batch]
-                u = model(x)
-                q = torch.where(a, 0, torch.where(b, 1, torch.clamp(u, 0, 1)))
-                out_list.append(q.cpu())
+            for x, a, b in tqdm(DataLoader(dataset, batch_size=batch_size)):
+                out_list.append(self(x, a, b).cpu())
         return torch.cat(out_list).numpy()
+
+    def brier_score(self, test_loader: DataLoader) -> float:
+        """
+        Evaluate the Brier score on test data.
+
+        Parameters
+        ----------
+        test_loader
+            Test data loader.
+
+        Returns
+        -------
+        Brier score.
+
+        """
+        self.eval()
+        with torch.no_grad():
+            total = 0.0
+            n_samples = 0
+            for x, a, b, target in tqdm(test_loader):
+                q = self(x, a, b)
+                total += torch.sum((q - target.to(self._device)) ** 2).item()
+                n_samples += len(q)
+            return total / n_samples
 
     def fetch_model(self) -> nn.Module:
         """Return a copy of the neural network (lobe)."""
