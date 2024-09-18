@@ -75,12 +75,12 @@ class Preprocessing:
 
         ca_coords = []
         if self.backend == 'mdtraj':
-            for traj in tqdm(self.traj_objects, desc="Processing trajectories (mdtraj)"):
+            for traj in tqdm(self.traj_objects, desc="Extracting Ca coordinates (mdtraj)"):
                 ca_indices = traj.top.select('name CA')
                 coords = torch.from_numpy(traj.xyz[:, ca_indices]).to(self._dtype)
                 ca_coords.append(coords)
         elif self.backend == 'mda':
-            for traj in tqdm(self.traj_objects, desc="Processing trajectories (MDAnalysis)"):
+            for traj in tqdm(self.traj_objects, desc="Extracting Ca coordinates (MDAnalysis)"):
                 ca = traj.select_atoms('name CA')
                 ca_positions = []
                 for ts in tqdm(traj.trajectory[::self.stride], desc="Frames", leave=False):
@@ -103,12 +103,13 @@ class Preprocessing:
             # select ca atoms pairs
             sample_traj = self.traj_objects[0]
             ca_pairs = sample_traj.top.select_pairs('name CA', 'name CA')
-            for traj in tqdm(self.traj_objects, desc="Processing trajectories (mdtraj)"):
+            for traj in tqdm(self.traj_objects, desc="Extracting Ca pairwise distances (mdtraj)"):
                 # Compute the pairwise distances using mdtraj with selected pairs
                 distances = md.compute_distances(traj, ca_pairs)
                 ca_pairwise_dist.append(torch.from_numpy(distances).to(self._dtype))
+            print(f'There are {ca_pairwise_dist[0].shape[1]} pairs of CA pairwise distances as global features.')
         elif self.backend == 'mda':
-            for u in tqdm(self.traj_objects, desc="Processing trajectories (MDAnalysis)"):
+            for u in tqdm(self.traj_objects, desc="Extracting Ca pairwise distances (MDAnalysis)"):
                 ca = u.select_atoms('name CA')
 
                 # Initialize an array to store CA atom positions across all frames
@@ -130,6 +131,7 @@ class Preprocessing:
                 sq_dist = np.sum(diff ** 2, axis=-1)  # Shape: (n_frames, n_pairs)
                 pairwise_distances = np.sqrt(sq_dist)  # Shape: (n_frames, n_pairs)
                 ca_pairwise_dist.append(torch.from_numpy(pairwise_distances).to(self._dtype))
+            print(f'There are {ca_pairwise_dist[0].shape[1]} pairs of CA pairwise distances as global features.')
 
         return ca_pairwise_dist
 
