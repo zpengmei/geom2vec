@@ -11,41 +11,41 @@ from torch.utils.data import Dataset
 class Preprocessing:
     """
     Preprocess the original trajectories to create datasets for training.
+    All data is converted to PyTorch tensors.
 
     Parameters
     ----------
-    torch_or_numpy
-        Array type of the elements of the output dataset.
-
+    dtype : torch.dtype, optional
+        Data type of the tensors. Default is torch.float32.
     """
 
-    def __init__(
-            self,
-            torch_or_numpy="numpy",
-    ):
-        self._torch_or_numpy = torch_or_numpy
-
-        if torch_or_numpy == "torch":
-            self._dtype = torch.float32
-        else:
-            self._dtype = np.float32
+    def __init__(self, dtype=torch.float32):
+        self._dtype = dtype
 
     def _seq_trajs(self, data):
-        if self._torch_or_numpy == "numpy":
-            data = copy(data)
-            if not isinstance(data, list):
-                data = [data]
-            for i in range(len(data)):
-                data[i] = data[i].astype(self._dtype)
+        """
+        Convert input data to a list of PyTorch tensors.
 
-        else:
-            if not isinstance(data, list):
-                data = [data]
-            for i in range(len(data)):
-                if not isinstance(data[i], torch.Tensor):
-                    data[i] = torch.tensor(data[i])
-                else:
-                    data[i] = data[i].clone().detach()
+        Parameters
+        ----------
+        data : array-like or list of array-like
+            The input data to be converted.
+
+        Returns
+        -------
+        list of torch.Tensor
+            The processed data as a list of tensors.
+        """
+
+        data = copy(data)
+        if not isinstance(data, list):
+            data = [data]
+
+        for i in range(len(data)):
+            if not isinstance(data[i], torch.Tensor):
+                data[i] = torch.tensor(data[i], dtype=self._dtype)
+            else:
+                data[i] = data[i].clone().detach().type(self._dtype)
 
         return data
 
@@ -199,12 +199,12 @@ class Preprocessing:
 
             data_traj = data[k]
 
-            if self._torch_or_numpy == "numpy":
-                ina_traj = ina[k].astype(bool)
-                inb_traj = inb[k].astype(bool)
-            else:
-                ina_traj = ina[k].bool()
-                inb_traj = inb[k].bool()
+            # if self._torch_or_numpy == "numpy":
+            #     ina_traj = ina[k].astype(bool)
+            #     inb_traj = inb[k].astype(bool)
+            # else:
+            ina_traj = ina[k].bool()
+            inb_traj = inb[k].bool()
 
             for i in range(L_re):
                 dataset.append(
@@ -248,18 +248,18 @@ class Preprocessing:
             and 6 other entries.
 
         """
-        if self._torch_or_numpy == "numpy":
-            from .util import (
-                forward_stop,
-                backward_stop,
-                count_transition_paths_windows,
-            )
-        else:
-            from .util import (
-                forward_stop_torch as forward_stop,
-                backward_stop_torch as backward_stop,
-                count_transition_paths_windows_torch as count_transition_paths_windows,
-            )
+        # if self._torch_or_numpy == "numpy":
+        #     from .util import (
+        #         forward_stop,
+        #         backward_stop,
+        #         count_transition_paths_windows,
+        #     )
+        # else:
+        from .util import (
+            forward_stop_torch as forward_stop,
+            backward_stop_torch as backward_stop,
+            count_transition_paths_windows_torch as count_transition_paths_windows,
+        )
 
         assert len(data) == len(ina) == len(inb)
 
@@ -278,14 +278,14 @@ class Preprocessing:
 
             data_traj = data[k]
 
-            if self._torch_or_numpy == "numpy":
-                ina_traj = ina[k].astype(bool)
-                inb_traj = inb[k].astype(bool)
-                ind_traj = np.logical_not(np.logical_or(ina_traj, inb_traj))
-            else:
-                ina_traj = ina[k].bool()
-                inb_traj = inb[k].bool()
-                ind_traj = torch.logical_not(torch.logical_or(ina_traj, inb_traj))
+            # if self._torch_or_numpy == "numpy":
+            #     ina_traj = ina[k].astype(bool)
+            #     inb_traj = inb[k].astype(bool)
+            #     ind_traj = np.logical_not(np.logical_or(ina_traj, inb_traj))
+            # else:
+            ina_traj = ina[k].bool()
+            inb_traj = inb[k].bool()
+            ind_traj = torch.logical_not(torch.logical_or(ina_traj, inb_traj))
 
             r = backward_stop(ind_traj[:, 0])
             s = forward_stop(ind_traj[:, 0])
@@ -361,39 +361,39 @@ class Preprocessing:
 
             data_traj = data[k]
 
-            if self._torch_or_numpy == "numpy":
-                from .util import backward_stop, forward_stop
+            # if self._torch_or_numpy == "numpy":
+            #     from .util import backward_stop, forward_stop
+            #
+            #     ina_traj = ina[k].astype(bool)
+            #     inb_traj = inb[k].astype(bool)
+            #     assert not np.any(np.logical_and(ina_traj, inb_traj))
+            #
+            #     ind_traj = np.logical_not(np.logical_or(ina_traj, inb_traj))
+            #     r = backward_stop(ind_traj[:, 0])
+            #     s = forward_stop(ind_traj[:, 0])
+            #
+            #     target_r = np.full((L_all, 1), np.nan, dtype=np.float32)
+            #     target_s = np.full((L_all, 1), np.nan, dtype=np.float32)
+            #
+            #     target_r[r >= 0] = inb_traj[r[r >= 0]]
+            #     target_s[s < L_all] = inb_traj[s[s < L_all]]
+            #
+            # else:
+            from .util import backward_stop_torch, forward_stop_torch
 
-                ina_traj = ina[k].astype(bool)
-                inb_traj = inb[k].astype(bool)
-                assert not np.any(np.logical_and(ina_traj, inb_traj))
+            ina_traj = ina[k].bool()
+            inb_traj = inb[k].bool()
+            assert not torch.any(torch.logical_and(ina_traj, inb_traj))
 
-                ind_traj = np.logical_not(np.logical_or(ina_traj, inb_traj))
-                r = backward_stop(ind_traj[:, 0])
-                s = forward_stop(ind_traj[:, 0])
+            ind_traj = torch.logical_not(torch.logical_or(ina_traj, inb_traj))
+            r = backward_stop_torch(ind_traj[:, 0])
+            s = forward_stop_torch(ind_traj[:, 0])
 
-                target_r = np.full((L_all, 1), np.nan, dtype=np.float32)
-                target_s = np.full((L_all, 1), np.nan, dtype=np.float32)
+            target_r = torch.full((L_all, 1), np.nan, dtype=torch.float32)
+            target_s = torch.full((L_all, 1), np.nan, dtype=torch.float32)
 
-                target_r[r >= 0] = inb_traj[r[r >= 0]]
-                target_s[s < L_all] = inb_traj[s[s < L_all]]
-
-            else:
-                from .util import backward_stop_torch, forward_stop_torch
-
-                ina_traj = ina[k].bool()
-                inb_traj = inb[k].bool()
-                assert not torch.any(torch.logical_and(ina_traj, inb_traj))
-
-                ind_traj = torch.logical_not(torch.logical_or(ina_traj, inb_traj))
-                r = backward_stop_torch(ind_traj[:, 0])
-                s = forward_stop_torch(ind_traj[:, 0])
-
-                target_r = torch.full((L_all, 1), np.nan, dtype=torch.float32)
-                target_s = torch.full((L_all, 1), np.nan, dtype=torch.float32)
-
-                target_r[r >= 0] = inb_traj[r[r >= 0]].float()
-                target_s[s < L_all] = inb_traj[s[s < L_all]].float()
+            target_r[r >= 0] = inb_traj[r[r >= 0]].float()
+            target_s[s < L_all] = inb_traj[s[s < L_all]].float()
 
             for i in range(drop_first, L_all - drop_last):
                 dataset.append((data_traj[i], ina_traj[i], inb_traj[i], target_r[i]))
@@ -427,77 +427,77 @@ class Preprocessing:
         """
         assert len(data) == len(ina) == len(inb)
 
-        if self._torch_or_numpy == "numpy":
-            from .util import forward_stop
+        # if self._torch_or_numpy == "numpy":
+        #     from .util import forward_stop
+        #
+        #     # squeeze the ina and inb
+        #
+        #     data = self._seq_trajs(data)
+        #     ina = self._seq_trajs(ina)
+        #     inb = self._seq_trajs(inb)
+        #
+        #     num_trajs = len(data)
+        #     dataset = []
+        #
+        #     for k in range(num_trajs):
+        #         L_all = data[k].shape[0]
+        #         L_re = L_all - lag_time
+        #
+        #         ina_traj = ina[k].astype(int)
+        #         inb_traj = inb[k].astype(int)
+        #
+        #         ind_traj = 1 - ina_traj - inb_traj
+        #         ind_traj = np.squeeze(ind_traj)
+        #
+        #         t0 = np.arange(L_re)
+        #         t1 = t0 + lag_time
+        #         ts = np.minimum(t1, forward_stop(ind_traj)[t0])
+        #
+        #         data_traj = data[k][t0]
+        #         data_traj_lag = data[k][t1]
+        #         ind_traj_out = ind_traj[t0, np.newaxis]
+        #         ind_traj_lag = ind_traj[t1, np.newaxis]
+        #         ind_traj_stop = ind_traj[ts, np.newaxis]
+        #
+        #         assert len(data_traj) == len(data_traj_lag) == len(ind_traj_lag) == len(ind_traj_stop)
+        #
+        #         for i in range(L_re):
+        #             dataset.append((data_traj[i], data_traj_lag[i], ind_traj_stop[i]))
+        #
+        # elif self._torch_or_numpy == "torch":
+        from .util import forward_stop_torch as forward_stop
 
-            # squeeze the ina and inb
+        data = self._seq_trajs(data)
+        ina = self._seq_trajs(ina)
+        inb = self._seq_trajs(inb)
 
-            data = self._seq_trajs(data)
-            ina = self._seq_trajs(ina)
-            inb = self._seq_trajs(inb)
+        num_trajs = len(data)
+        dataset = []
 
-            num_trajs = len(data)
-            dataset = []
+        for k in range(num_trajs):
+            L_all = data[k].shape[0]
+            L_re = L_all - lag_time
 
-            for k in range(num_trajs):
-                L_all = data[k].shape[0]
-                L_re = L_all - lag_time
+            ina_traj = ina[k].int()
+            inb_traj = inb[k].int()
 
-                ina_traj = ina[k].astype(int)
-                inb_traj = inb[k].astype(int)
+            ind_traj = 1 - ina_traj - inb_traj
+            ind_traj = ind_traj.squeeze()
 
-                ind_traj = 1 - ina_traj - inb_traj
-                ind_traj = np.squeeze(ind_traj)
+            t0 = torch.arange(L_re)
+            t1 = t0 + lag_time
+            ts = torch.minimum(t1, forward_stop(ind_traj)[t0])
 
-                t0 = np.arange(L_re)
-                t1 = t0 + lag_time
-                ts = np.minimum(t1, forward_stop(ind_traj)[t0])
+            data_traj = data[k][t0]
+            data_traj_lag = data[k][t1]
+            ind_traj_out = ind_traj[t0].unsqueeze(1)
+            ind_traj_lag = ind_traj[t1].unsqueeze(1)
+            ind_traj_stop = ind_traj[ts].unsqueeze(1)
 
-                data_traj = data[k][t0]
-                data_traj_lag = data[k][t1]
-                ind_traj_out = ind_traj[t0, np.newaxis]
-                ind_traj_lag = ind_traj[t1, np.newaxis]
-                ind_traj_stop = ind_traj[ts, np.newaxis]
+            assert len(data_traj) == len(data_traj_lag) == len(ind_traj_lag) == len(ind_traj_stop)
 
-                assert len(data_traj) == len(data_traj_lag) == len(ind_traj_lag) == len(ind_traj_stop)
-
-                for i in range(L_re):
-                    dataset.append((data_traj[i], data_traj_lag[i], ind_traj_stop[i]))
-
-        elif self._torch_or_numpy == "torch":
-            from .util import forward_stop_torch as forward_stop
-
-            data = self._seq_trajs(data)
-            ina = self._seq_trajs(ina)
-            inb = self._seq_trajs(inb)
-
-            num_trajs = len(data)
-            dataset = []
-
-            for k in range(num_trajs):
-                L_all = data[k].shape[0]
-                L_re = L_all - lag_time
-
-                ina_traj = ina[k].int()
-                inb_traj = inb[k].int()
-
-                ind_traj = 1 - ina_traj - inb_traj
-                ind_traj = ind_traj.squeeze()
-
-                t0 = torch.arange(L_re)
-                t1 = t0 + lag_time
-                ts = torch.minimum(t1, forward_stop(ind_traj)[t0])
-
-                data_traj = data[k][t0]
-                data_traj_lag = data[k][t1]
-                ind_traj_out = ind_traj[t0].unsqueeze(1)
-                ind_traj_lag = ind_traj[t1].unsqueeze(1)
-                ind_traj_stop = ind_traj[ts].unsqueeze(1)
-
-                assert len(data_traj) == len(data_traj_lag) == len(ind_traj_lag) == len(ind_traj_stop)
-
-                for i in range(L_re):
-                    dataset.append((data_traj[i], data_traj_lag[i], ind_traj_stop[i]))
+            for i in range(L_re):
+                dataset.append((data_traj[i], data_traj_lag[i], ind_traj_stop[i]))
 
         return dataset
 
@@ -519,40 +519,40 @@ class Preprocessing:
         """
         assert mmap_mode in ["r", "r+", "w+", "c", None]
 
-        if self._torch_or_numpy == "torch":
-            files = os.listdir(data_path)
-            files = [os.path.join(data_path, f) for f in files if f.endswith(".pt")]
-            files = sorted(files, key=lambda x: int(x.split("_")[-1].split(".")[0]))
+        # if self._torch_or_numpy == "torch":
+        files = os.listdir(data_path)
+        files = [os.path.join(data_path, f) for f in files if f.endswith(".pt")]
+        files = sorted(files, key=lambda x: int(x.split("_")[-1].split(".")[0]))
 
-        else:
-            files = os.listdir(data_path)
-            files = [os.path.join(data_path, f) for f in files if f.endswith(".npz")]
-            files = sorted(files, key=lambda x: int(x.split("_")[-1].split(".")[0]))
+        # else:
+        #     files = os.listdir(data_path)
+        #     files = [os.path.join(data_path, f) for f in files if f.endswith(".npz")]
+        #     files = sorted(files, key=lambda x: int(x.split("_")[-1].split(".")[0]))
 
         data = []
         for file in tqdm(files):
-            if self._torch_or_numpy == "torch":
-                traj = torch.load(file, map_location="cpu", mmap=mmap_mode).to(self._dtype)
-                if sum_token:
-                    traj = traj.sum(-3)
-                data.append(traj)
+            # if self._torch_or_numpy == "torch":
+            traj = torch.load(file, map_location="cpu", mmap=mmap_mode).to(self._dtype)
+            if sum_token:
+                traj = traj.sum(-3)
+            data.append(traj)
 
-            else:
-                if to_torch:
-                    traj = np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
-                    traj = torch.tensor(traj).squeeze()
-                    if sum_token:
-                        traj = traj.sum(-3)
-                    data.append(traj)
-
-                else:
-                    traj = np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
-                    if sum_token:
-                        traj = traj.sum(-3)
-                    data.append(traj)
-
-        if to_torch:
-            self._torch_or_numpy = "torch"
+        #     else:
+        #         if to_torch:
+        #             traj = np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
+        #             traj = torch.tensor(traj).squeeze()
+        #             if sum_token:
+        #                 traj = traj.sum(-3)
+        #             data.append(traj)
+        #
+        #         else:
+        #             traj = np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
+        #             if sum_token:
+        #                 traj = traj.sum(-3)
+        #             data.append(traj)
+        #
+        # if to_torch:
+        #     self._torch_or_numpy = "torch"
 
         return data
 
@@ -576,37 +576,43 @@ class Preprocessing:
 
         files = []
         for root, _, filenames in os.walk(data_path):
-            if self._torch_or_numpy == "torch":
-                files.extend([os.path.join(root, f) for f in filenames if f.endswith(".pt")])
-            else:
-                files.extend([os.path.join(root, f) for f in filenames if f.endswith(".npz")])
+            files.extend([os.path.join(root, f) for f in filenames if f.endswith(".pt")])
+            # if self._torch_or_numpy == "torch":
+            #     files.extend([os.path.join(root, f) for f in filenames if f.endswith(".pt")])
+            # else:
+            #     files.extend([os.path.join(root, f) for f in filenames if f.endswith(".npz")])
 
         files = sorted(files, key=lambda x: int(x.split("_")[-1].split(".")[0]))
 
         data = []
         for file in tqdm(files):
-            if self._torch_or_numpy == "torch":
-                traj = torch.load(file, map_location="cpu", mmap=mmap_mode).to(self._dtype)
-                if sum_token:
-                    traj = traj.sum(-3)
-                data.append(traj)
+            traj = torch.load(file, map_location="cpu", mmap=mmap_mode).to(self._dtype)
+            if sum_token:
+                traj = traj.sum(-3)
+            data.append(traj)
 
-            else:
-                if to_torch:
-                    traj = np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
-                    traj = torch.tensor(traj).squeeze()
-                    if sum_token:
-                        traj = traj.sum(-3)
-                    data.append(traj)
+            # if self._torch_or_numpy == "torch":
+            #     traj = torch.load(file, map_location="cpu", mmap=mmap_mode).to(self._dtype)
+            #     if sum_token:
+            #         traj = traj.sum(-3)
+            #     data.append(traj)
+            #
+            # else:
+            #     if to_torch:
+            #         traj = np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
+            #         traj = torch.tensor(traj).squeeze()
+            #         if sum_token:
+            #             traj = traj.sum(-3)
+            #         data.append(traj)
+            #
+            #     else:
+            #         traj = np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
+            #         if sum_token:
+            #             traj = traj.sum(-3)
+            #         data.append(traj)
 
-                else:
-                    traj = np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
-                    if sum_token:
-                        traj = traj.sum(-3)
-                    data.append(traj)
-
-        if to_torch:
-            self._torch_or_numpy = "torch"
+        # if to_torch:
+        #     self._torch_or_numpy = "torch"
 
         return data
 
