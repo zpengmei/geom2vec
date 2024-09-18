@@ -6,6 +6,8 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from copy import copy
 from torch.utils.data import Dataset
+import MDAnalysis as mda
+import mdtraj as md
 
 
 class Preprocessing:
@@ -58,6 +60,98 @@ class Preprocessing:
                 data[i] = data[i].clone().detach().type(self._dtype)
 
         return data
+
+    def _extract_ca_coords(self):
+        """
+        Extract the coordinates of the alpha carbons from the trajectories.
+        Returns
+        -------
+        ca_coords : list of torch.Tensor
+            The coordinates of the alpha carbons in the trajectories.
+        """
+
+        ca_coords = []
+        if self.backend == 'mdtraj':
+            for traj in self.traj_objects:
+                ca_coords.append(torch.from_numpy(traj.xyz[:, traj.top.select('name CA')]).to(self._dtype))
+        elif self.backend == 'mda':
+            for traj in self.traj_objects:
+                ca_coords.append(torch.from_numpy(traj.atoms.select_atoms('name CA').positions).to(self._dtype))
+        return ca_coords
+
+    def _extract_ca_pairwise_dist(self):
+        """
+        Extract the pairwise distances between the alpha carbons from the trajectories.
+        Returns
+        -------
+        ca_pairwise_dist : list of torch.Tensor
+            The pairwise distances between the alpha carbons in the trajectories.
+        """
+
+        ca_pairwise_dist = []
+        if self.backend == 'mdtraj':
+            # select ca atoms pairs
+            sample_traj = self.traj_objects[0]
+            ca_pairs = sample_traj.top.select_pairs('name CA', 'name CA')
+            for traj in self.traj_objects:
+                # compute the pairwise distances using mdtraj with selected pairs
+                distances = md.compute_distances(traj, ca_pairs)
+                ca_pairwise_dist.append(torch.from_numpy(distances).to(self._dtype))
+
+        elif self.backend == 'mda':
+
+            for u in self.traj_objects:
+                ca = u.select_atoms('name CA')
+
+                # Initialize an array to store CA atom positions across all frames
+                ca_coordinates = np.zeros((u.trajectory.n_frames, len(ca), 3))
+                for ts in u.trajectory:
+                    ca_coordinates[ts.frame] = ca.positions
+
+                # Compute the pairwise distances considering only the upper triangle
+                n_atoms = ca_coordinates.shape[1]
+                i_upper, j_upper = np.triu_indices(n_atoms, k=1)
+
+                # Get the coordinates of the atom pairs
+                coords_i = ca_coordinates[:, i_upper, :]  # Shape: (n_frames, n_pairs, 3)
+                coords_j = ca_coordinates[:, j_upper, :]  # Shape: (n_frames, n_pairs, 3)
+
+                # Compute the differences and distances
+                diff = coords_i - coords_j  # Shape: (n_frames, n_pairs, 3)
+                sq_dist = np.sum(diff ** 2, axis=-1)  # Shape: (n_frames, n_pairs)
+                pairwise_distances = np.sqrt(sq_dist)  # Shape: (n_frames, n_pairs)
+                ca_pairwise_dist.append(torch.from_numpy(pairwise_distances).to(self._dtype))
+
+        return ca_pairwise_dist
+
+    def create_time_lagged_dataset_flat(self, data, lag_time):
+        # testing the new function to create time-lagged dataset in a flat format including new features
+
+        graph_features = self._seq_trajs(data)
+        ca_coords = self._extract_ca_coords()
+        ca_pairwise_dist = self._extract_ca_pairwise_dist()
+        assert len(graph_features) == len(ca_coords) == len(ca_pairwise_dist)
+
+        num_trajs = len(graph_features)
+        from .util import packing_features
+
+        packed_features = []
+        for i in range(num_trajs):
+            flat_features = packing_features(graph_features=graph_features[i],
+                                             ca_coords=ca_coords[i],
+                                             global_features=ca_pairwise_dist[i],
+                                             num_tokens=self.num_tokens)
+            packed_features.append(flat_features)
+
+        dataset = []
+        for i in range(num_trajs):
+            L_all = packed_features[i].shape[0]
+            L_re = L_all - lag_time
+            for j in range(L_re):
+                dataset.append((packed_features[i][j,:], packed_features[i][j + lag_time,:]))\
+
+        return dataset
+
 
     def create_time_lagged_dataset(self, data, lag_time):
         """
@@ -467,7 +561,7 @@ class Preprocessing:
 
         return data
 
-    def load_dataset_folder(self, data_path, mmap_mode="r",sorting=True):
+    def load_dataset_folder(self, data_path, mmap_mode="r", sorting=True):
         """Load the dataset from the file.
 
         Parameters
