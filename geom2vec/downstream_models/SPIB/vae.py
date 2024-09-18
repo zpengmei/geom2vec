@@ -63,7 +63,7 @@ class SPIBVAE(SPIB):
 
     # the prior
     def get_representative_z(self):
-        X = self.representative_inputs
+        X = self.representative_inputs.to(self.device)
         x = self.encoder(X)
         representative_z_mean, representative_z_logvar = self.encode(x)  # C x M
         return representative_z_mean, representative_z_logvar
@@ -117,7 +117,7 @@ class SPIBVAE(SPIB):
         return outputs
 
     def forward(self, data):
-        inputs = torch.flatten(data, start_dim=1)
+        inputs = torch.flatten(data, start_dim=1).to(self.device)
 
         x = self.encoder(inputs)
         z_mean, z_logvar = self.encode(x)
