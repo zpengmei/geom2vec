@@ -154,7 +154,11 @@ class Lobe(nn.Module):
     def forward(self, data: torch.Tensor) -> torch.Tensor:
         # now we assume the input data is a flat tensor
 
-        unpacked_features = unpacking_features(data)
+        unpacked_features = unpacking_features(data,
+                                               num_tokens=self.num_tokens-1,
+                                               hidden_dim=self.hidden_channels,
+                                               global_dim=self.global_dim,
+                                               )
         graph_features = unpacked_features["graph_features"]
         global_features = unpacked_features["global_features"]
         ca_coords = unpacked_features["ca_coords"]
