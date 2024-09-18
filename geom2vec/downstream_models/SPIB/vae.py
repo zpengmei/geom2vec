@@ -19,7 +19,7 @@ class SPIBVAE(SPIB):
             nn.Linear(self.output_dim, 1, bias=False),
             nn.Softmax(dim=0))
 
-        if self.ecnoder is not None:
+        if self.encoder is not None:
             self.encoder = nn.Sequential(
                 nn.Linear(np.prod(self.data_shape), self.neuron_num1),
                 nn.ReLU(),

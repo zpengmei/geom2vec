@@ -656,11 +656,10 @@ class SPIBDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        return self.data[idx], self.data_weights[idx], self.time_lagged_labels[idx]
+        return self.data[idx], self.time_lagged_labels[idx], self.data_weights[idx]
 
     def update_labels(self, new_labels):
         if not isinstance(new_labels, torch.Tensor):
             new_labels = torch.tensor(new_labels)
 
-        # Update the labels directly in-place
-        self.time_lagged_labels[:] = new_labels
+        self.time_lagged_labels = new_labels
