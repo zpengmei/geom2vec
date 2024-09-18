@@ -75,12 +75,18 @@ class Preprocessing:
 
         ca_coords = []
         if self.backend == 'mdtraj':
-            for traj in self.traj_objects:
-                ca_coords.append(torch.from_numpy(traj.xyz[:, traj.top.select('name CA')]).to(self._dtype))
+            for traj in tqdm(self.traj_objects, desc="Processing trajectories (mdtraj)"):
+                ca_indices = traj.top.select('name CA')
+                coords = torch.from_numpy(traj.xyz[:, ca_indices]).to(self._dtype)
+                ca_coords.append(coords)
         elif self.backend == 'mda':
-            for traj in self.traj_objects:
-                coords = torch.from_numpy(traj.atoms.select_atoms('name CA').positions).to(self._dtype)
-                ca_coords.append(coords[::self.stride])
+            for traj in tqdm(self.traj_objects, desc="Processing trajectories (MDAnalysis)"):
+                ca = traj.select_atoms('name CA')
+                ca_positions = []
+                for ts in tqdm(traj.trajectory[::self.stride], desc="Frames", leave=False):
+                    ca_positions.append(ca.positions.copy())
+                coords = torch.from_numpy(np.array(ca_positions)).to(self._dtype)
+                ca_coords.append(coords)
         return ca_coords
 
     def _extract_ca_pairwise_dist(self):
@@ -97,22 +103,20 @@ class Preprocessing:
             # select ca atoms pairs
             sample_traj = self.traj_objects[0]
             ca_pairs = sample_traj.top.select_pairs('name CA', 'name CA')
-            for traj in self.traj_objects:
-                # compute the pairwise distances using mdtraj with selected pairs
+            for traj in tqdm(self.traj_objects, desc="Processing trajectories (mdtraj)"):
+                # Compute the pairwise distances using mdtraj with selected pairs
                 distances = md.compute_distances(traj, ca_pairs)
                 ca_pairwise_dist.append(torch.from_numpy(distances).to(self._dtype))
-
         elif self.backend == 'mda':
-
-            for u in self.traj_objects:
+            for u in tqdm(self.traj_objects, desc="Processing trajectories (MDAnalysis)"):
                 ca = u.select_atoms('name CA')
 
                 # Initialize an array to store CA atom positions across all frames
-                ca_coordinates = np.zeros((u.trajectory.n_frames, len(ca), 3))
-                for ts in u.trajectory:
-                    ca_coordinates[ts.frame] = ca.positions
+                n_frames = len(u.trajectory[::self.stride])
+                ca_coordinates = np.zeros((n_frames, len(ca), 3))
+                for idx, ts in enumerate(tqdm(u.trajectory[::self.stride], desc="Frames", leave=False)):
+                    ca_coordinates[idx] = ca.positions.copy()
 
-                ca_coordinates = ca_coordinates[::self.stride] # handle stride for mda
                 # Compute the pairwise distances considering only the upper triangle
                 n_atoms = ca_coordinates.shape[1]
                 i_upper, j_upper = np.triu_indices(n_atoms, k=1)
