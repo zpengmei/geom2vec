@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from tqdm import tqdm
 from copy import copy
 from torch.utils.data import Dataset
@@ -82,70 +83,35 @@ class Preprocessing:
 
         return dataset
 
-    def create_time_lagged_state_label_dataset(self, data, data_weights, state_labels, lag_time):
+    def create_spib_dataset(self, data_list, label_list, weight_list, output_dim, lag_time=1, subsampling_timestep=1):
         """
-        create a time-lagged dataset for SPIB, user provides the input feature and correspoding state labels
-        SPIB take instantaneous data and predict the future state labels
+        Prepare data for SPIB training and validation
 
-        Args:
-            data: list or ndarray or torch.Tensor
-            state_labels: list or ndarray or torch.Tensor
-            data_weights: list or ndarray or torch.Tensor
-            lag_time: int
-        Returns:
-            dataset: list of tuples, each tuple has two elements: one is the instantaneous data frame,
-            the other is the corresponding time-lagged state labels
-            ((frames, features),(frames, weights),(frames,features),(frames, state_labels))
-
+        Parameters
+        ----------
+        data_list : List of trajectory data
+            The data which is wrapped into a dataset.
+        label_list : List of corresponding labels
+            Corresponding label data. Must be of the same length.
+        weight_list: List of corresponding weights, optional, default=None
+            Corresponding weight data. Must be of the same length.
+        output_dim: int
+            The total number of states in label_list.
+        lag_time: int, default=1
+            The lag time used to produce timeshifted blocks.
+        subsampling_timestep: int, default=1
+            The step size for subsampling.
         """
-        data = self._seq_trajs(data)
-        data_labels = self._seq_trajs(state_labels)
 
-        if data_weights is None: # if no weights are provided, set all weights to 1
-            if self._torch_or_numpy == "numpy":
-                data_weights = [np.ones_like(data_labels[i]) for i in range(len(data_labels))]
-            else:
-                data_weights = [torch.ones_like(data_labels[i]) for i in range(len(data_labels))]
-        data_weights = self._seq_trajs(data_weights)
+        if weight_list is None:
+            dataset = SPIBDataset(data_list, label_list, None, lag_time=lag_time,
+                                  subsampling_timestep=subsampling_timestep,
+                                  output_dim=output_dim)
 
-        # sanity check of the shape
-        print('Checking the shape of the input data and state labels')
-        for i in range(len(data)):
-            print(f'The shape of the input data is {data[i].shape}, '
-                  f'the shape of the state labels is {data_labels[i].shape}',
-                  f'the shape of the weights is {data_weights[i].shape}')
-
-            if len(data_labels[i].shape) == 1 or data_labels[i].shape[1] == 1:
-                print('The state labels should be one-hot encoded, please check the shape of the state labels')
-                print('Now we will convert the state labels to one-hot encoding')
-                data_labels[i] = torch.eye(data_labels[i].max() + 1)[data_labels[i]]
-                print(f'The shape of the state labels is {data_labels[i].shape}')
-
-            assert data[i].shape[0] == data_labels[i].shape[0] == data_weights[i].shape[0]
-
-        num_trajs = len(data)
-
-        # dataset = []
-        instant_data = []
-        time_lagged_data = []
-        instant_weights = []
-        time_lagged_labels = []
-        for k in range(num_trajs):
-            L_all = data[k].shape[0]
-            L_re = L_all - lag_time
-            for i in range(L_re):
-                # dataset.append((data[k][i, :], data_weights[k][i], data[k][i + lag_time, :], data_labels[k][i + lag_time]))
-                instant_data.append(data[k][i, :])
-                time_lagged_data.append(data[k][i + lag_time, :])
-                instant_weights.append(data_weights[k][i])
-                time_lagged_labels.append(data_labels[k][i + lag_time])
-
-        instant_data = torch.stack(instant_data)
-        time_lagged_data = torch.stack(time_lagged_data)
-        instant_weights = torch.stack(instant_weights)
-        time_lagged_labels = torch.stack(time_lagged_labels)
-
-        dataset = SPIBDataset(instant_data, instant_weights, time_lagged_data, time_lagged_labels)
+        else:
+            dataset = SPIBDataset(data_list, label_list, weight_list, lag_time=lag_time,
+                                  subsampling_timestep=subsampling_timestep,
+                                  output_dim=output_dim)
 
         return dataset
 
@@ -645,21 +611,95 @@ class Preprocessing:
         return data
 
 
-class SPIBDataset(Dataset):
-    def __init__(self, data, data_weights, time_lagged_data, time_lagged_labels):
-        self.data = data
-        self.data_weights = data_weights
-        self.time_lagged_labels = time_lagged_labels
-        self.time_lagged_data = time_lagged_data
+class SPIBDataset(torch.utils.data.Dataset):
+    """
+    High-level container for time-lagged time-series data
+
+    Parameters
+    ----------
+    data_list : List of trajectory data
+        The data which is wrapped into a dataset.
+    label_list : List of corresponding labels
+        Corresponding label data. Must be of the same length.
+    weight_list: List of corresponding weights, optional, default=None
+        Corresponding weight data. Must be of the same length.
+    lag_time: int, default=1
+        The lag time used to produce timeshifted blocks.
+    subsampling_timestep: int, default=1
+        The step size for subsampling.
+    output_dim: int, optional
+        The total number of states in label_list.
+    device: torch device, default=torch.device("cpu")
+        The device on which the torch modules are executed.
+    """
+
+    def __init__(self, data_list, label_list, weight_list=None, lag_time=1, subsampling_timestep=1, output_dim=None):
+        assert len(data_list) == len(label_list), \
+            f"Length of data_list and label_list does not match ({len(data_list)} != {len(label_list)})"
+
+        self.lag_time = lag_time
+        self.subsampling_timestep = subsampling_timestep
+        self.traj_num = len(data_list)
+
+        if weight_list is None:
+            # Set weights as ones
+            weight_list = [np.ones_like(label_list[i]) for i in range(len(label_list))]
+
+        data_init_list = []
+        for i in range(len(data_list)):
+            data_init_list.append(
+                self._data_init(self.lag_time, self.subsampling_timestep,
+                                data_list[i], label_list[i], weight_list[i])
+            )
+
+        # Concatenate and convert to tensors
+        self.data_weights = torch.from_numpy(
+            np.concatenate([item[3] for item in data_init_list], axis=0)
+        ).float()
+
+        self.past_data = torch.from_numpy(
+            np.concatenate([item[0] for item in data_init_list], axis=0)
+        ).float()
+
+        self.future_data = torch.from_numpy(
+            np.concatenate([item[1] for item in data_init_list], axis=0)
+        ).float()
+
+        label_data = torch.from_numpy(
+            np.concatenate([item[2] for item in data_init_list], axis=0)
+        ).long()
+
+        # Record the lengths of trajectories
+        self.split_lengths = [len(item[2]) for item in data_init_list]
+
+        # One-hot encode labels
+        if output_dim is None:
+            self.future_labels = F.one_hot(label_data)
+        else:
+            self.future_labels = F.one_hot(label_data, num_classes=output_dim)
 
     def __len__(self):
-        return len(self.data)
+        return len(self.past_data)
 
     def __getitem__(self, idx):
-        return self.data[idx], self.time_lagged_labels[idx], self.data_weights[idx]
+        return self.past_data[idx], self.future_labels[idx], self.data_weights[idx]
 
     def update_labels(self, new_labels):
-        if not isinstance(new_labels, torch.Tensor):
-            new_labels = torch.tensor(new_labels)
+        self.future_labels = new_labels
 
-        self.time_lagged_labels = new_labels
+    def _data_init(self, lag_time, subsampling_timestep, traj_data, traj_label, traj_weights):
+        assert len(traj_data) == len(traj_label), \
+            f"Length of traj_data and traj_label does not match ({len(traj_data)} != {len(traj_label)})"
+
+        # Subsample and time-shift data
+        past_data = traj_data[:(len(traj_data) - lag_time):subsampling_timestep]
+        future_data = traj_data[lag_time::subsampling_timestep]
+        label = traj_label[lag_time::subsampling_timestep]
+
+        if traj_weights is not None:
+            assert len(traj_data) == len(traj_weights)
+            weights = traj_weights[:(len(traj_weights) - lag_time):subsampling_timestep]
+        else:
+            weights = None
+
+        return past_data, future_data, label, weights
