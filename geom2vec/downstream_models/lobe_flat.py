@@ -98,8 +98,9 @@ class Lobe(nn.Module):
 
         # global token auxiliary network
         self.use_global = use_global
+        self.global_dim = global_dim
+
         if use_global:
-            self.global_dim = global_dim
             self.global_projection = MLP(
                 input_channels=global_dim,
                 hidden_channels=intermediate_channels,
