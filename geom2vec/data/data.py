@@ -158,8 +158,7 @@ class Preprocessing:
             L_all = packed_features[i].shape[0]
             L_re = L_all - lag_time
             for j in range(L_re):
-                dataset.append((packed_features[i][j, :], packed_features[i][j + lag_time, :])) \
- \
+                dataset.append((packed_features[i][j, :], packed_features[i][j + lag_time, :]))
         return dataset
 
     def create_time_lagged_dataset(self, data, lag_time):
