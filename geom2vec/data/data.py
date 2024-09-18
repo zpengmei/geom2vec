@@ -28,12 +28,11 @@ class Preprocessing:
         In case of using mda backend, the stride to be used for loading the trajectories. mdtraj already handled this.
     """
 
-    def __init__(self, dtype=torch.float32, num_tokens=1, traj_objects=None, backend='mdtraj',stride=1):
+    def __init__(self, dtype=torch.float32, num_tokens=1, backend='mdtraj', stride=1):
         assert backend in ['mdtraj', 'mda'], f"Backend {backend} is not supported."
 
         self._dtype = dtype
         self.num_tokens = num_tokens
-        self.traj_objects = traj_objects
         self.backend = backend
         self.stride = stride
 
@@ -64,7 +63,7 @@ class Preprocessing:
 
         return data
 
-    def _extract_ca_coords(self):
+    def _extract_ca_coords(self, traj_objects):
         """
         Extract the coordinates of the alpha carbons from the trajectories.
         Returns
@@ -75,12 +74,12 @@ class Preprocessing:
 
         ca_coords = []
         if self.backend == 'mdtraj':
-            for traj in tqdm(self.traj_objects, desc="Extracting Ca coordinates (mdtraj)"):
+            for traj in tqdm(traj_objects, desc="Extracting Ca coordinates (mdtraj)"):
                 ca_indices = traj.top.select('name CA')
                 coords = torch.from_numpy(traj.xyz[:, ca_indices]).to(self._dtype)
                 ca_coords.append(coords)
         elif self.backend == 'mda':
-            for traj in tqdm(self.traj_objects, desc="Extracting Ca coordinates (MDAnalysis)"):
+            for traj in tqdm(traj_objects, desc="Extracting Ca coordinates (MDAnalysis)"):
                 ca = traj.select_atoms('name CA')
                 ca_positions = []
                 for ts in tqdm(traj.trajectory[::self.stride], desc="Frames", leave=False):
@@ -89,7 +88,7 @@ class Preprocessing:
                 ca_coords.append(coords)
         return ca_coords
 
-    def _extract_ca_pairwise_dist(self):
+    def _extract_ca_pairwise_dist(self, traj_objects):
         """
         Extract the pairwise distances between the alpha carbons from the trajectories.
         Returns
@@ -101,15 +100,15 @@ class Preprocessing:
         ca_pairwise_dist = []
         if self.backend == 'mdtraj':
             # select ca atoms pairs
-            sample_traj = self.traj_objects[0]
+            sample_traj = traj_objects[0]
             ca_pairs = sample_traj.top.select_pairs('name CA', 'name CA')
-            for traj in tqdm(self.traj_objects, desc="Extracting Ca pairwise distances (mdtraj)"):
+            for traj in tqdm(traj_objects, desc="Extracting Ca pairwise distances (mdtraj)"):
                 # Compute the pairwise distances using mdtraj with selected pairs
                 distances = md.compute_distances(traj, ca_pairs)
                 ca_pairwise_dist.append(torch.from_numpy(distances).to(self._dtype))
             print(f'There are {ca_pairwise_dist[0].shape[1]} pairs of CA pairwise distances as global features.')
         elif self.backend == 'mda':
-            for u in tqdm(self.traj_objects, desc="Extracting Ca pairwise distances (MDAnalysis)"):
+            for u in tqdm(traj_objects, desc="Extracting Ca pairwise distances (MDAnalysis)"):
                 ca = u.select_atoms('name CA')
 
                 # Initialize an array to store CA atom positions across all frames
@@ -135,7 +134,7 @@ class Preprocessing:
 
         return ca_pairwise_dist
 
-    def create_time_lagged_dataset_flat(self, data, lag_time):
+    def create_time_lagged_dataset_flat(self, data, lag_time, traj_objects=None):
         # testing the new function to create time-lagged dataset in a flat format including new features
 
         graph_features = self._seq_trajs(data)
@@ -159,10 +158,9 @@ class Preprocessing:
             L_all = packed_features[i].shape[0]
             L_re = L_all - lag_time
             for j in range(L_re):
-                dataset.append((packed_features[i][j,:], packed_features[i][j + lag_time,:]))\
-
+                dataset.append((packed_features[i][j, :], packed_features[i][j + lag_time, :])) \
+ \
         return dataset
-
 
     def create_time_lagged_dataset(self, data, lag_time):
         """
