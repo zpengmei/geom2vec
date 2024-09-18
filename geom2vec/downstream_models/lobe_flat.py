@@ -82,6 +82,7 @@ class Lobe(nn.Module):
 
         self.pooling = pooling
         self.num_tokens = num_tokens
+        self.hidden_channels = hidden_channels
         self.token_mixer = token_mixer
         self.vector_feature = vector_feature
         self.dropout = Dropout(mlp_dropout)
