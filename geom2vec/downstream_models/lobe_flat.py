@@ -157,7 +157,7 @@ class Lobe(nn.Module):
         # now we assume the input data is a flat tensor
 
         unpacked_features = unpacking_features(data,
-                                               num_tokens=self.num_tokens-1,
+                                               num_tokens=self.num_tokens,
                                                hidden_dim=self.hidden_channels,
                                                global_dim=self.global_dim,
                                                )
@@ -165,6 +165,7 @@ class Lobe(nn.Module):
         global_features = unpacked_features["global_features"]
         ca_coords = unpacked_features["ca_coords"]
 
+        data = graph_features
         # now graph features is a tensor of shape (batch_size, num_nodes, 4, feature_dim)
         # global features is a tensor of shape (batch_size, global_dim)
         # ca_coords is a tensor of shape (batch_size, num_nodes, 3)
@@ -202,7 +203,7 @@ class Lobe(nn.Module):
             if self.use_global:
                 # add the global projection as a global token
                 # (batch, num_token, hidden_channels) -> (batch, num_token+1, hidden_channels)
-                x = torch.cat([x, global_proj.unsqueeze(1).expand(-1, num_nodes, -1)], dim=1)
+                x = torch.cat([x, global_proj.unsqueeze(1)], dim=1)
 
             x = self.mixer(x)
             x = self.output_projection(x)
@@ -219,7 +220,7 @@ class Lobe(nn.Module):
             if self.use_global:
                 # add the global projection as a global token
                 # (batch, num_token, hidden_channels) -> (batch, num_token+1, hidden_channels)
-                x = torch.cat([x, global_proj.unsqueeze(1).expand(-1, num_nodes, -1)], dim=1)
+                x = torch.cat([x, global_proj.unsqueeze(1)], dim=1)
             x = self.mixer(x)
             x = self.output_projection(x)
 
