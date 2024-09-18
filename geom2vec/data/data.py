@@ -134,12 +134,13 @@ class Preprocessing:
 
         return ca_pairwise_dist
 
-    def create_time_lagged_dataset_flat(self, data, lag_time, traj_objects=None):
+    def create_time_lagged_dataset_flat(self, data, lag_time, ca_coords, ca_pairwise_dist):
         # testing the new function to create time-lagged dataset in a flat format including new features
 
         graph_features = self._seq_trajs(data)
-        ca_coords = self._extract_ca_coords(traj_objects)
-        ca_pairwise_dist = self._extract_ca_pairwise_dist(traj_objects)
+        ca_coords = self._seq_trajs(ca_coords)
+        ca_pairwise_dist = self._seq_trajs(ca_pairwise_dist)
+
         assert len(graph_features) == len(ca_coords) == len(ca_pairwise_dist)
 
         num_trajs = len(graph_features)
