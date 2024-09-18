@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch_scatter import scatter
 from tqdm import tqdm
+from copy import deepcopy
 
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
@@ -303,6 +304,7 @@ def extract_mda_info_folder(
     dcd_files.sort()
 
     position_list = []
+    mda_objects = []
     for traj in dcd_files:
         print(f"Processing {traj}")
         u = mda.Universe(top_file, os.path.join(folder, traj))
@@ -310,8 +312,9 @@ def extract_mda_info_folder(
             u, stride=stride, selection=selection
         )
         position_list.append(positions)
+        mda_objects.append(deepcopy(u))
 
-    return position_list, atomic_numbers, segment_counts, dcd_files
+    return position_list, atomic_numbers, segment_counts, dcd_files, mda_objects
 
 
 def extract_mdtraj_info(md_traj_object, exclude_hydrogens=True):
@@ -407,4 +410,4 @@ def extract_mdtraj_info_folder(folder, top_file, stride=1,
                                                                         exclude_hydrogens=exclude_hydrogens)
         position_list.append(positions)
 
-    return position_list, atomic_numbers, segment_counts, dcd_files
+    return position_list, atomic_numbers, segment_counts, dcd_files, mdtraj_object

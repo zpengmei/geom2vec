@@ -17,10 +17,20 @@ class Preprocessing:
     ----------
     dtype : torch.dtype, optional
         Data type of the tensors. Default is torch.float32.
+            num_tokens : int
+            The number of tokens to be used for encoding the data. e.g. num. amino acids in a protein sequence.
+        traj_objects : list of objects of mdtraj or mdanalysis
+        backend : str, default='mdtraj'
+            The backend to be used for loading the trajectories. Currently only 'mdtraj' and 'mda' are supported.
     """
 
-    def __init__(self, dtype=torch.float32):
+    def __init__(self, dtype=torch.float32, num_tokens=1, traj_objects=None, backend='mdtraj'):
+        assert backend in ['mdtraj', 'mda'], f"Backend {backend} is not supported."
+
         self._dtype = dtype
+        self.num_tokens = num_tokens
+        self.traj_objects = traj_objects
+        self.backend = backend
 
     def _seq_trajs(self, data):
         """
@@ -199,10 +209,6 @@ class Preprocessing:
 
             data_traj = data[k]
 
-            # if self._torch_or_numpy == "numpy":
-            #     ina_traj = ina[k].astype(bool)
-            #     inb_traj = inb[k].astype(bool)
-            # else:
             ina_traj = ina[k].bool()
             inb_traj = inb[k].bool()
 
@@ -248,13 +254,6 @@ class Preprocessing:
             and 6 other entries.
 
         """
-        # if self._torch_or_numpy == "numpy":
-        #     from .util import (
-        #         forward_stop,
-        #         backward_stop,
-        #         count_transition_paths_windows,
-        #     )
-        # else:
         from .util import (
             forward_stop_torch as forward_stop,
             backward_stop_torch as backward_stop,
@@ -278,11 +277,6 @@ class Preprocessing:
 
             data_traj = data[k]
 
-            # if self._torch_or_numpy == "numpy":
-            #     ina_traj = ina[k].astype(bool)
-            #     inb_traj = inb[k].astype(bool)
-            #     ind_traj = np.logical_not(np.logical_or(ina_traj, inb_traj))
-            # else:
             ina_traj = ina[k].bool()
             inb_traj = inb[k].bool()
             ind_traj = torch.logical_not(torch.logical_or(ina_traj, inb_traj))
@@ -361,24 +355,6 @@ class Preprocessing:
 
             data_traj = data[k]
 
-            # if self._torch_or_numpy == "numpy":
-            #     from .util import backward_stop, forward_stop
-            #
-            #     ina_traj = ina[k].astype(bool)
-            #     inb_traj = inb[k].astype(bool)
-            #     assert not np.any(np.logical_and(ina_traj, inb_traj))
-            #
-            #     ind_traj = np.logical_not(np.logical_or(ina_traj, inb_traj))
-            #     r = backward_stop(ind_traj[:, 0])
-            #     s = forward_stop(ind_traj[:, 0])
-            #
-            #     target_r = np.full((L_all, 1), np.nan, dtype=np.float32)
-            #     target_s = np.full((L_all, 1), np.nan, dtype=np.float32)
-            #
-            #     target_r[r >= 0] = inb_traj[r[r >= 0]]
-            #     target_s[s < L_all] = inb_traj[s[s < L_all]]
-            #
-            # else:
             from .util import backward_stop_torch, forward_stop_torch
 
             ina_traj = ina[k].bool()
@@ -426,45 +402,6 @@ class Preprocessing:
             and the corresponding time-lagged data frame.
         """
         assert len(data) == len(ina) == len(inb)
-
-        # if self._torch_or_numpy == "numpy":
-        #     from .util import forward_stop
-        #
-        #     # squeeze the ina and inb
-        #
-        #     data = self._seq_trajs(data)
-        #     ina = self._seq_trajs(ina)
-        #     inb = self._seq_trajs(inb)
-        #
-        #     num_trajs = len(data)
-        #     dataset = []
-        #
-        #     for k in range(num_trajs):
-        #         L_all = data[k].shape[0]
-        #         L_re = L_all - lag_time
-        #
-        #         ina_traj = ina[k].astype(int)
-        #         inb_traj = inb[k].astype(int)
-        #
-        #         ind_traj = 1 - ina_traj - inb_traj
-        #         ind_traj = np.squeeze(ind_traj)
-        #
-        #         t0 = np.arange(L_re)
-        #         t1 = t0 + lag_time
-        #         ts = np.minimum(t1, forward_stop(ind_traj)[t0])
-        #
-        #         data_traj = data[k][t0]
-        #         data_traj_lag = data[k][t1]
-        #         ind_traj_out = ind_traj[t0, np.newaxis]
-        #         ind_traj_lag = ind_traj[t1, np.newaxis]
-        #         ind_traj_stop = ind_traj[ts, np.newaxis]
-        #
-        #         assert len(data_traj) == len(data_traj_lag) == len(ind_traj_lag) == len(ind_traj_stop)
-        #
-        #         for i in range(L_re):
-        #             dataset.append((data_traj[i], data_traj_lag[i], ind_traj_stop[i]))
-        #
-        # elif self._torch_or_numpy == "torch":
         from .util import forward_stop_torch as forward_stop
 
         data = self._seq_trajs(data)
@@ -501,7 +438,7 @@ class Preprocessing:
 
         return dataset
 
-    def load_dataset(self, data_path, mmap_mode="r", data_key="arr_0", to_torch=True, sum_token=False):
+    def load_dataset(self, data_path, mmap_mode="r"):
         """Load the dataset from the file.
 
         Parameters
@@ -519,44 +456,18 @@ class Preprocessing:
         """
         assert mmap_mode in ["r", "r+", "w+", "c", None]
 
-        # if self._torch_or_numpy == "torch":
         files = os.listdir(data_path)
         files = [os.path.join(data_path, f) for f in files if f.endswith(".pt")]
         files = sorted(files, key=lambda x: int(x.split("_")[-1].split(".")[0]))
 
-        # else:
-        #     files = os.listdir(data_path)
-        #     files = [os.path.join(data_path, f) for f in files if f.endswith(".npz")]
-        #     files = sorted(files, key=lambda x: int(x.split("_")[-1].split(".")[0]))
-
         data = []
         for file in tqdm(files):
-            # if self._torch_or_numpy == "torch":
             traj = torch.load(file, map_location="cpu", mmap=mmap_mode).to(self._dtype)
-            if sum_token:
-                traj = traj.sum(-3)
             data.append(traj)
-
-        #     else:
-        #         if to_torch:
-        #             traj = np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
-        #             traj = torch.tensor(traj).squeeze()
-        #             if sum_token:
-        #                 traj = traj.sum(-3)
-        #             data.append(traj)
-        #
-        #         else:
-        #             traj = np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
-        #             if sum_token:
-        #                 traj = traj.sum(-3)
-        #             data.append(traj)
-        #
-        # if to_torch:
-        #     self._torch_or_numpy = "torch"
 
         return data
 
-    def load_dataset_folder(self, data_path, mmap_mode="r", data_key="arr_0", to_torch=True, sum_token=False):
+    def load_dataset_folder(self, data_path, mmap_mode="r",sorting=True):
         """Load the dataset from the file.
 
         Parameters
@@ -566,6 +477,8 @@ class Preprocessing:
             The type of data to be stored in the output file.
         mmap_mode: str, default = 'r'
             The mode to open the file. If None, the file will be opened in the default mode.
+        sorting: bool, default=True
+            Sort the files in the folder
 
         Returns
         -------
@@ -577,42 +490,13 @@ class Preprocessing:
         files = []
         for root, _, filenames in os.walk(data_path):
             files.extend([os.path.join(root, f) for f in filenames if f.endswith(".pt")])
-            # if self._torch_or_numpy == "torch":
-            #     files.extend([os.path.join(root, f) for f in filenames if f.endswith(".pt")])
-            # else:
-            #     files.extend([os.path.join(root, f) for f in filenames if f.endswith(".npz")])
 
-        files = sorted(files, key=lambda x: int(x.split("_")[-1].split(".")[0]))
-
+        if sorting:
+            files = sorted(files, key=lambda x: int(x.split("_")[-1].split(".")[0]))
         data = []
         for file in tqdm(files):
             traj = torch.load(file, map_location="cpu", mmap=mmap_mode).to(self._dtype)
-            if sum_token:
-                traj = traj.sum(-3)
             data.append(traj)
-
-            # if self._torch_or_numpy == "torch":
-            #     traj = torch.load(file, map_location="cpu", mmap=mmap_mode).to(self._dtype)
-            #     if sum_token:
-            #         traj = traj.sum(-3)
-            #     data.append(traj)
-            #
-            # else:
-            #     if to_torch:
-            #         traj = np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
-            #         traj = torch.tensor(traj).squeeze()
-            #         if sum_token:
-            #             traj = traj.sum(-3)
-            #         data.append(traj)
-            #
-            #     else:
-            #         traj = np.load(file, mmap_mode=mmap_mode)[data_key].astype(self._dtype)
-            #         if sum_token:
-            #             traj = traj.sum(-3)
-            #         data.append(traj)
-
-        # if to_torch:
-        #     self._torch_or_numpy = "torch"
 
         return data
 
