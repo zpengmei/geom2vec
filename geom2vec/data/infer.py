@@ -270,7 +270,7 @@ def extract_mda_info(protein, stride=1, selection=None):
 
 
 def extract_mda_info_folder(
-        folder, top_file, stride=1, selection=None, file_postfix=".dcd"
+        folder, top_file, stride=1, selection=None, file_postfix=".dcd", sorting=True
 ):
     r"""
     do the extraction for all the files in the folder
@@ -300,20 +300,24 @@ def extract_mda_info_folder(
 
     # Get all the .dcd files in the folder
     dcd_files = [f for f in os.listdir(folder) if f.endswith(file_postfix)]
-    dcd_files.sort()
+    if sorting:
+        # Sort the files
+        dcd_files.sort()
 
     position_list = []
     mda_objects = []
+    file_paths = []
     for traj in dcd_files:
         print(f"Processing {traj}")
         u = mda.Universe(top_file, os.path.join(folder, traj))
+        file_paths.append(os.path.join(folder, traj))
         positions, atomic_numbers, segment_counts = extract_mda_info(
             u, stride=stride, selection=selection
         )
         position_list.append(positions)
         mda_objects.append(u)
 
-    return position_list, atomic_numbers, segment_counts, dcd_files, mda_objects
+    return position_list, atomic_numbers, segment_counts, file_paths, mda_objects
 
 
 def extract_mdtraj_info(md_traj_object, exclude_hydrogens=True):
@@ -385,10 +389,12 @@ def extract_mdtraj_info_folder(folder, top_file, stride=1,
         dcd_files = dcd_files[:num_trajs]
 
     position_list = []
+    file_paths = []
     for traj in dcd_files:
         print(f"Processing {traj}")
         try:
             mdtraj_object = md.load(os.path.join(folder, traj), top=top_file, stride=stride)
+            file_paths.append(os.path.join(folder, traj))
         except Exception as e:
             print(f"Error loading file {traj}")
             print(e)
@@ -409,4 +415,4 @@ def extract_mdtraj_info_folder(folder, top_file, stride=1,
                                                                         exclude_hydrogens=exclude_hydrogens)
         position_list.append(positions)
 
-    return position_list, atomic_numbers, segment_counts, dcd_files, mdtraj_object
+    return position_list, atomic_numbers, segment_counts, file_paths, mdtraj_object
