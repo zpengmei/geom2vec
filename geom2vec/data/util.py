@@ -1,5 +1,213 @@
 import numpy as np
 import torch
+from typing import Optional
+
+
+def packing_features(
+        graph_features: torch.Tensor,
+        global_features: torch.Tensor,
+        num_tokens: int,
+        ca_coords: Optional[torch.Tensor] = None
+) -> torch.Tensor:
+    """
+    Prepare the input data as a flat tensor by combining graph features, CA coordinates, and global features.
+
+    Parameters
+    ----------
+    graph_features : torch.Tensor
+        Tensor containing graph features.
+        Shape: (batch, num_tokens, 4, hidden) if num_tokens > 1
+               (batch, 4, hidden) if num_tokens == 1
+    global_features : torch.Tensor
+        Tensor containing global features.
+        Shape: (batch, global_dim)
+    num_tokens : int
+        Number of tokens (e.g., amino acids) per sample.
+    ca_coords : torch.Tensor, optional
+        Tensor containing CA coordinates.
+        Shape: (batch, num_tokens, 3)
+        Required if num_tokens > 1.
+
+    Returns
+    -------
+    torch.Tensor
+        Packed feature tensor.
+        Shape:
+            - If num_tokens > 1:
+                (batch, num_tokens * hidden + num_tokens * 3 * (hidden + 1) + global_dim)
+            - If num_tokens == 1:
+                (batch, 4 * hidden + global_dim)
+
+    Raises
+    ------
+    ValueError
+        If input tensor dimensions do not align with expectations.
+    """
+    batch_size = graph_features.size(0)
+
+    if num_tokens != 1:
+        expected_shape = (batch_size, num_tokens, 4, graph_features.size(-1))
+        if graph_features.dim() != 4 or graph_features.shape[:3] != expected_shape[:3]:
+            raise ValueError(
+                f"graph_features must have shape {expected_shape}, but got {graph_features.shape}"
+            )
+        if ca_coords is None:
+            raise ValueError("ca_coords must be provided when num_tokens > 1")
+        if ca_coords.shape != (batch_size, num_tokens, 3):
+            raise ValueError(
+                f"ca_coords must have shape ({batch_size}, {num_tokens}, 3), but got {ca_coords.shape}"
+            )
+    else:
+        expected_shape = (batch_size, 4, graph_features.size(-1))
+        if graph_features.dim() != 3 or graph_features.shape != expected_shape:
+            raise ValueError(
+                f"graph_features must have shape {expected_shape}, but got {graph_features.shape}"
+            )
+        if ca_coords is not None:
+            raise ValueError("ca_coords should be None when num_tokens == 1")
+
+    if global_features.size(0) != batch_size:
+        raise ValueError(
+            "Number of samples in global_features does not match the batch size of graph_features"
+        )
+
+    if num_tokens != 1:
+        # Split graph features into scaler and vector components
+        scaler_features = graph_features[:, :, 0, :]  # Shape: (batch, num_tokens, hidden)
+        vector_features = graph_features[:, :, 1:, :]  # Shape: (batch, num_tokens, 3, hidden)
+
+        # Concatenate CA coordinates to vector features
+        ca_coords_expanded = ca_coords.unsqueeze(-1)  # Shape: (batch, num_tokens, 3, 1)
+        vector_features = torch.cat([vector_features, ca_coords_expanded], dim=-1)  # (batch, num_tokens, 3, hidden +1)
+
+        # Flatten scaler and vector features
+        scaler_flat = scaler_features.reshape(batch_size, -1)  # (batch, num_tokens * hidden)
+        vector_flat = vector_features.reshape(batch_size, -1)  # (batch, num_tokens * 3 * (hidden +1))
+
+        # Concatenate all features
+        packed_features = torch.cat([scaler_flat, vector_flat, global_features], dim=-1)
+    else:
+        # Split graph features into scaler and vector components
+        scaler_features = graph_features[:, 0, :]  # Shape: (batch, hidden)
+        vector_features = graph_features[:, 1:, :]  # Shape: (batch, 3, hidden)
+
+        # Flatten scaler and vector features
+        scaler_flat = scaler_features.reshape(batch_size, -1)  # (batch, hidden)
+        vector_flat = vector_features.reshape(batch_size, -1)  # (batch, 3 * hidden)
+
+        # Concatenate all features
+        packed_features = torch.cat([scaler_flat, vector_flat, global_features], dim=-1)
+
+    return packed_features
+
+
+def unpacking_features(
+        packed_features: torch.Tensor,
+        num_tokens: int,
+        hidden_dim: int,
+        global_dim: int
+) -> dict:
+    """
+    Unpack the packed feature tensor into graph features, CA coordinates, and global features.
+
+    Parameters
+    ----------
+    packed_features : torch.Tensor
+        Tensor containing packed features.
+        Shape:
+            - If num_tokens > 1:
+                (batch, num_tokens * hidden + num_tokens * 3 * (hidden + 1) + global_dim)
+            - If num_tokens == 1:
+                (batch, 4 * hidden + global_dim)
+    num_tokens : int
+        Number of tokens (e.g., amino acids) per sample.
+    hidden_dim : int
+        Dimension of the hidden features in graph_features.
+    global_dim : int
+        Dimension of the global features.
+
+    Returns
+    -------
+    dict
+        A dictionary containing:
+            - 'graph_features': torch.Tensor
+                Original graph features.
+                Shape: (batch, num_tokens, 4, hidden) if num_tokens > 1
+                       (batch, 4, hidden) if num_tokens == 1
+            - 'ca_coords': torch.Tensor or None
+                CA coordinates.
+                Shape: (batch, num_tokens, 3) if num_tokens > 1
+                None if num_tokens == 1
+            - 'global_features': torch.Tensor
+                Global features.
+                Shape: (batch, global_dim)
+    """
+    batch_size = packed_features.size(0)
+
+    if num_tokens != 1:
+        # Calculate sizes based on packing logic
+        scaler_size = num_tokens * hidden_dim
+        vector_size = num_tokens * 3 * (hidden_dim + 1)
+        expected_size = scaler_size + vector_size + global_dim
+
+        if packed_features.size(1) != scaler_size + vector_size + global_dim:
+            raise ValueError(
+                f"packed_features has incorrect shape. Expected second dimension to be {scaler_size + vector_size + global_dim}, but got {packed_features.size(1)}"
+            )
+
+        # Extract scaler, vector, and global features
+        scaler_flat = packed_features[:, :scaler_size]  # (batch, num_tokens * hidden_dim)
+        vector_flat = packed_features[:,
+                      scaler_size:scaler_size + vector_size]  # (batch, num_tokens * 3 * (hidden_dim +1))
+        global_features = packed_features[:, scaler_size + vector_size:]  # (batch, global_dim)
+
+        # Reshape scaler and vector features
+        scaler = scaler_flat.reshape(batch_size, num_tokens, hidden_dim)  # (batch, num_tokens, hidden_dim)
+        vector = vector_flat.reshape(batch_size, num_tokens, 3, hidden_dim + 1)  # (batch, num_tokens, 3, hidden_dim +1)
+
+        # Split vector into original vector features and CA coordinates
+        vector_features = vector[:, :, :, :hidden_dim]  # (batch, num_tokens, 3, hidden_dim)
+        ca_coords = vector[:, :, :, hidden_dim]  # (batch, num_tokens, 3)
+
+        # Reconstruct graph_features by concatenating scaler and vector
+        graph_features = torch.cat(
+            [scaler.unsqueeze(2), vector_features],
+            dim=2
+        )  # (batch, num_tokens, 4, hidden_dim)
+
+    else:
+        # Calculate sizes based on packing logic
+        scaler_size = hidden_dim
+        vector_size = 3 * hidden_dim
+        expected_size = scaler_size + vector_size + global_dim
+
+        if packed_features.size(1) != scaler_size + vector_size + global_dim:
+            raise ValueError(
+                f"packed_features has incorrect shape. Expected second dimension to be {scaler_size + vector_size + global_dim}, but got {packed_features.size(1)}"
+            )
+
+        # Extract scaler, vector, and global features
+        scaler_flat = packed_features[:, :scaler_size]  # (batch, hidden_dim)
+        vector_flat = packed_features[:, scaler_size:scaler_size + vector_size]  # (batch, 3 * hidden_dim)
+        global_features = packed_features[:, scaler_size + vector_size:]  # (batch, global_dim)
+
+        # Reshape scaler and vector features
+        scaler = scaler_flat.reshape(batch_size, hidden_dim)  # (batch, hidden_dim)
+        vector = vector_flat.reshape(batch_size, 3, hidden_dim)  # (batch, 3, hidden_dim)
+
+        # Reconstruct graph_features by concatenating scaler and vector
+        graph_features = torch.cat(
+            [scaler.unsqueeze(1), vector],
+            dim=1
+        )  # (batch, 4, hidden_dim)
+
+        ca_coords = None  # CA coordinates are not present when num_tokens ==1
+
+    return {
+        'graph_features': graph_features,
+        'ca_coords': ca_coords,
+        'global_features': global_features
+    }
 
 
 def forward_stop(in_domain):
@@ -102,7 +310,7 @@ def count_transition_paths_windows(in_domain, in_reactant, in_product, lag_time)
     final_count[t[1:][is_transition_path]] = 1
     final_count = np.concatenate([[0], np.cumsum(final_count)])
 
-    out = final_count[lag_time + 1 :] - initial_count[: -(lag_time + 1)]
+    out = final_count[lag_time + 1:] - initial_count[: -(lag_time + 1)]
     out = np.maximum(out, 0)
     return out
 
