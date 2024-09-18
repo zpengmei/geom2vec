@@ -8,7 +8,6 @@ import numpy as np
 import torch
 from torch_scatter import scatter
 from tqdm import tqdm
-from copy import deepcopy
 
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
@@ -312,7 +311,7 @@ def extract_mda_info_folder(
             u, stride=stride, selection=selection
         )
         position_list.append(positions)
-        mda_objects.append(deepcopy(u))
+        mda_objects.append(u)
 
     return position_list, atomic_numbers, segment_counts, dcd_files, mda_objects
 
