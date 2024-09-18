@@ -138,8 +138,8 @@ class Preprocessing:
         # testing the new function to create time-lagged dataset in a flat format including new features
 
         graph_features = self._seq_trajs(data)
-        ca_coords = self._extract_ca_coords()
-        ca_pairwise_dist = self._extract_ca_pairwise_dist()
+        ca_coords = self._extract_ca_coords(traj_objects)
+        ca_pairwise_dist = self._extract_ca_pairwise_dist(traj_objects)
         assert len(graph_features) == len(ca_coords) == len(ca_pairwise_dist)
 
         num_trajs = len(graph_features)
