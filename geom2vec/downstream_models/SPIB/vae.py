@@ -117,9 +117,7 @@ class SPIBVAE(SPIB):
         return outputs
 
     def forward(self, data):
-        inputs = torch.flatten(data, start_dim=1).to(self.device)
-
-        x = self.encoder(inputs)
+        x = self.encoder(data.to(self.device))
         z_mean, z_logvar = self.encode(x)
         z_sample = self.reparameterize(z_mean, z_logvar)
         outputs = self.decode(z_sample)
