@@ -19,20 +19,23 @@ class Preprocessing:
     ----------
     dtype : torch.dtype, optional
         Data type of the tensors. Default is torch.float32.
-            num_tokens : int
-            The number of tokens to be used for encoding the data. e.g. num. amino acids in a protein sequence.
-        traj_objects : list of objects of mdtraj or mdanalysis
-        backend : str, default='mdtraj'
-            The backend to be used for loading the trajectories. Currently only 'mdtraj' and 'mda' are supported.
+    num_tokens : int
+        The number of tokens to be used for encoding the data. e.g. num. amino acids in a protein sequence.
+    traj_objects : list of objects of mdtraj or mdanalysis
+    backend : str, default='mdtraj'
+        The backend to be used for loading the trajectories. Currently only 'mdtraj' and 'mda' are supported.
+    stride : int, default=1
+        In case of using mda backend, the stride to be used for loading the trajectories. mdtraj already handled this.
     """
 
-    def __init__(self, dtype=torch.float32, num_tokens=1, traj_objects=None, backend='mdtraj'):
+    def __init__(self, dtype=torch.float32, num_tokens=1, traj_objects=None, backend='mdtraj',stride=1):
         assert backend in ['mdtraj', 'mda'], f"Backend {backend} is not supported."
 
         self._dtype = dtype
         self.num_tokens = num_tokens
         self.traj_objects = traj_objects
         self.backend = backend
+        self.stride = stride
 
     def _seq_trajs(self, data):
         """
@@ -76,7 +79,8 @@ class Preprocessing:
                 ca_coords.append(torch.from_numpy(traj.xyz[:, traj.top.select('name CA')]).to(self._dtype))
         elif self.backend == 'mda':
             for traj in self.traj_objects:
-                ca_coords.append(torch.from_numpy(traj.atoms.select_atoms('name CA').positions).to(self._dtype))
+                coords = torch.from_numpy(traj.atoms.select_atoms('name CA').positions).to(self._dtype)
+                ca_coords.append(coords[::self.stride])
         return ca_coords
 
     def _extract_ca_pairwise_dist(self):
@@ -108,6 +112,7 @@ class Preprocessing:
                 for ts in u.trajectory:
                     ca_coordinates[ts.frame] = ca.positions
 
+                ca_coordinates = ca_coordinates[::self.stride] # handle stride for mda
                 # Compute the pairwise distances considering only the upper triangle
                 n_atoms = ca_coordinates.shape[1]
                 i_upper, j_upper = np.triu_indices(n_atoms, k=1)
