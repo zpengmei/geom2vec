@@ -341,7 +341,8 @@ class SPIBModel(SPIBVAE):
             batch_inputs = inputs[i:i + batch_size].to(self.device)
 
             # pass through VAE
-            z_mean, z_logvar = self.encode(batch_inputs)
+            x = self.encoder(batch_inputs)
+            z_mean, z_logvar = self.encode(x)
 
             log_prediction = self.decode(z_mean)
 
