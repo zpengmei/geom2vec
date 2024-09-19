@@ -344,15 +344,15 @@ class SubGVP(nn.Module):
         super(SubGVP, self).__init__()
 
         self.input_proj = GVP(
-            in_dims=hidden_channels,
-            out_dims=hidden_channels,
+            in_dims=(hidden_channels,hidden_channels),
+            out_dims=(hidden_channels,hidden_channels),
             vector_gate=vector_gating
         )
-        self.input_norm = gvp_layer_norm(hidden_channels)
+        self.input_norm = gvp_layer_norm((hidden_channels,hidden_channels))
 
         self.mp_layers = nn.ModuleList([
             GVPConvLayer(
-                node_dims=hidden_channels,
+                node_dims=(hidden_channels,hidden_channels),
                 drop_rate=dropout,
                 vector_gate=vector_gating
             ) for _ in range(num_layers)
