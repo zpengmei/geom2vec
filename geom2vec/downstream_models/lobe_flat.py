@@ -326,6 +326,10 @@ class Lobe(nn.Module):
 
             x = x.reshape(batch_size, num_nodes, dim)
             x, v = self.mixer(x, v, ca_coords)
+            if self.use_global:
+                # add the global projection as a global token
+                # (batch, num_token, hidden_channels) -> (batch, num_token+1, hidden_channels)
+                x = torch.cat([x, global_proj.unsqueeze(1)], dim=1)
             x = self.post_mixer(x)
             x = self.output_projection(x)
 
@@ -339,6 +343,10 @@ class Lobe(nn.Module):
                 x, v = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
             x = x.reshape(batch_size, num_nodes, -1)
             x, v = self.mixer(x, v, ca_coords)
+            if self.use_global:
+                # add the global projection as a global token
+                # (batch, num_token, hidden_channels) -> (batch, num_token+1, hidden_channels)
+                x = torch.cat([x, global_proj.unsqueeze(1)], dim=1)
             x = self.post_mixer(x)
             x = self.output_projection(x)
 
