@@ -47,40 +47,41 @@ class Lobe(nn.Module):
     """
 
     def __init__(
-        self,
-        hidden_channels: int,
-        intermediate_channels: int,
-        output_channels: int,
-        num_layers: int,
-        batch_norm: bool = False,
-        vector_feature: bool = True,
-        mlp_dropout: float = 0.0,
-        mlp_out_activation: Optional[nn.Module] = None,
-        device: torch.device = torch.device("cpu"),
-        token_mixer: str = "none",
-        num_mixer_layers: int = 4,
-        expansion_factor: int = 2,
-        nhead: int = 8,
-        pooling: str = "cls",
-        dropout: float = 0.1,
-        attn_map: bool = False,
-        num_tokens: int = 1,
-        token_dim: int = 64,
-        attn_mask: Tensor = None,
-        pool_mask: Tensor = None,
-        ## new arguments
-        use_global: bool = False,
-        global_dim: int = 64,
-        radius_cutoff: float = 8.0,
-        vector_gating: bool = False,
+            self,
+            hidden_channels: int,
+            intermediate_channels: int,
+            output_channels: int,
+            num_layers: int,
+            batch_norm: bool = False,
+            vector_feature: bool = True,
+            mlp_dropout: float = 0.0,
+            mlp_out_activation: Optional[nn.Module] = None,
+            device: torch.device = torch.device("cpu"),
+            token_mixer: str = "none",
+            num_mixer_layers: int = 4,
+            expansion_factor: int = 2,
+            nhead: int = 8,
+            pooling: str = "cls",
+            dropout: float = 0.1,
+            attn_map: bool = False,
+            num_tokens: int = 1,
+            token_dim: int = 64,
+            attn_mask: Tensor = None,
+            pool_mask: Tensor = None,
+            ## new arguments
+            use_global: bool = False,
+            global_dim: int = 64,
+            radius_cutoff: float = 8.0,
+            vector_gating: bool = False,
+            gvp_post_mixer_layers: int = 2,
     ):
         super(Lobe, self).__init__()
 
-        assert token_mixer in ["none", "subformer", "submixer", "subgvp"]
+        assert token_mixer in ["none", "subformer", "submixer", "subgvp", "submixer-gvp", "subformer-gvp"]
         assert pooling in ["cls", "mean", "sum"]
 
-        if (token_mixer == "submixer" or "subgvp") and pooling == "cls":
-            raise ValueError("Submixer does not support cls pooling")
+        if (token_mixer == "submixer" or "subgvp" or "submixer-gvp") and pooling == "cls":
+            raise ValueError("Submixer/gvp does not support cls pooling")
 
         self.pooling = pooling
         self.num_tokens = num_tokens
@@ -150,6 +151,69 @@ class Lobe(nn.Module):
                 dropout=dropout,
                 radius_cutoff=radius_cutoff,
                 pooling=pooling,
+            )
+        elif token_mixer == "submixer-gvp":
+            if not use_global:
+
+                self.mixer = SubGVP(
+                    num_tokens=num_tokens,
+                    hidden_channels=intermediate_channels,
+                    num_layers=num_mixer_layers,
+                    dropout=dropout,
+                    radius_cutoff=radius_cutoff,
+                    pooling='skip',
+                )
+            else:
+                self.mixer = SubGVP(
+                    num_tokens=num_tokens - 1,
+                    hidden_channels=intermediate_channels,
+                    num_layers=num_mixer_layers,
+                    dropout=dropout,
+                    radius_cutoff=radius_cutoff,
+                    pooling='skip',
+                )
+            self.post_mixer = SubMixer(
+                num_patch=num_tokens,
+                depth=gvp_post_mixer_layers,
+                dropout=dropout,
+                dim=intermediate_channels,
+                token_dim=token_dim,
+                channel_dim=int(expansion_factor * intermediate_channels),
+                pool=pooling,
+                pool_mask=pool_mask,
+                device=device,
+            )
+
+        elif token_mixer == "subformer-gvp":
+            if not use_global:
+                self.mixer = SubGVP(
+                    num_tokens=num_tokens,
+                    hidden_channels=intermediate_channels,
+                    num_layers=num_mixer_layers,
+                    dropout=dropout,
+                    radius_cutoff=radius_cutoff,
+                    pooling='skip',
+                )
+            else:
+                self.mixer = SubGVP(
+                    num_tokens=num_tokens - 1,
+                    hidden_channels=intermediate_channels,
+                    num_layers=num_mixer_layers,
+                    dropout=dropout,
+                    radius_cutoff=radius_cutoff,
+                    pooling='skip',
+                )
+            self.post_mixer = SubFormer(
+                hidden_channels=intermediate_channels,
+                encoder_layers=gvp_post_mixer_layers,
+                nhead=nhead,
+                dim_feedforward=int(expansion_factor * intermediate_channels),
+                pool=pooling,
+                dropout=dropout,
+                attn_map=attn_map,
+                attn_mask=attn_mask,
+                pool_mask=pool_mask,
+                device=device,
             )
 
         self.output_projection = MLP(
@@ -243,13 +307,39 @@ class Lobe(nn.Module):
             x_rep = data[:, :, 0, :].reshape(batch_size * num_nodes, -1)
             v_rep = data[:, :, 1:, :].reshape(batch_size * num_nodes, 3, -1)
             if not self.vector_feature:
-                x = self.input_projection(x_rep)
+                raise ValueError("Subgvp does not support scalar-only")
             else:
                 x, v = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
 
             x = x.reshape(batch_size, num_nodes, dim)
             x, v = self.mixer(x, v, ca_coords)
+            x = self.output_projection(x)
 
+        elif self.token_mixer == "submixer-gvp":
+            batch_size, num_nodes, _, dim = data.shape
+            x_rep = data[:, :, 0, :].reshape(batch_size * num_nodes, -1)
+            v_rep = data[:, :, 1:, :].reshape(batch_size * num_nodes, 3, -1)
+            if not self.vector_feature:
+                raise ValueError("Submixer-gvp does not support scalar-only")
+            else:
+                x, v = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
+
+            x = x.reshape(batch_size, num_nodes, dim)
+            x, v = self.mixer(x, v, ca_coords)
+            x = self.post_mixer(x)
+            x = self.output_projection(x)
+
+        elif self.token_mixer == "subformer-gvp":
+            batch_size, num_nodes, _, _ = data.shape
+            x_rep = data[:, :, 0, :].reshape(batch_size * num_nodes, -1)
+            v_rep = data[:, :, 1:, :].reshape(batch_size * num_nodes, 3, -1)
+            if not self.vector_feature:
+                raise ValueError("Subformer-gvp does not support scalar-only")
+            else:
+                x, v = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
+            x = x.reshape(batch_size, num_nodes, -1)
+            x, v = self.mixer(x, v, ca_coords)
+            x = self.post_mixer(x)
             x = self.output_projection(x)
 
         return x

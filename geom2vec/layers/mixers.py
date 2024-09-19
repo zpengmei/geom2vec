@@ -338,7 +338,7 @@ class SubGVP(nn.Module):
                  num_layers,
                  dropout,
                  radius_cutoff=8.0,
-                 vector_gating=True,
+                 vector_gating=False,
                  pooling="sum",
                  ):
         super(SubGVP, self).__init__()
@@ -371,10 +371,14 @@ class SubGVP(nn.Module):
         # creating the batching index
         batch_size, num_nodes, feature_dim = x.shape
         batch_index = torch.arange(batch_size).view(-1, 1).repeat(1, num_nodes).view(-1).to(x.device)
+        ca_coords = ca_coords.reshape(-1, 3)
+
         # flatten the input as PyG format: (batch_size * num_nodes, hidden_channels)
         x = x.view(-1, feature_dim)
         v = v.view(-1, 3, feature_dim)
-        ca_coords = ca_coords.view(-1, 3)
+        # permute the vector features to (batch_size * num_nodes, feature_dim, 3)
+        v = v.permute(0, 2, 1)
+        # ca_coords = ca_coords.reshape(-1, 3)
 
         # construct the radius graph
         edge_index = radius_graph(ca_coords, r=self.radius_cutoff, batch=batch_index, loop=False)
@@ -386,6 +390,9 @@ class SubGVP(nn.Module):
         for layer in self.mp_layers:
             feature_tuples = layer(feature_tuples,edge_index)
         x, v = feature_tuples
+        # permute the vector features back to (batch_size*num_nodes, 3, feature_dim)
+        v = v.permute(0, 2, 1)
+
 
         # reshape the output to the original shape
         x = x.view(batch_size, num_nodes, -1)
@@ -396,5 +403,7 @@ class SubGVP(nn.Module):
         elif self.pooling == "mean":
             x = x.mean(dim=1)
             v = v.mean(dim=1)
+        elif self.pooling == "skip":
+            pass
 
         return x, v

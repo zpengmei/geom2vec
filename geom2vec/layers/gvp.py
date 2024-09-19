@@ -264,7 +264,7 @@ class GVPConv(MessagePassing):
                          (self.so, self.vo), activations=(None, None)))
             else:
                 module_list.append(
-                    GVP_((2 * self.si + self.se, 2 * self.vi + self.ve), out_dims)
+                    GVP_((2 * self.si, 2 * self.vi), out_dims)
                 )
                 for i in range(n_layers - 2):
                     module_list.append(GVP_(out_dims, out_dims))
