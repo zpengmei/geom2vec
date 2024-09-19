@@ -151,6 +151,7 @@ class Lobe(nn.Module):
                 dropout=dropout,
                 radius_cutoff=radius_cutoff,
                 pooling=pooling,
+                vector_gating=vector_gating,
             )
         elif token_mixer == "submixer-gvp":
             if not use_global:
@@ -162,6 +163,7 @@ class Lobe(nn.Module):
                     dropout=dropout,
                     radius_cutoff=radius_cutoff,
                     pooling='skip',
+                    vector_gating=vector_gating,
                 )
             else:
                 self.mixer = SubGVP(
