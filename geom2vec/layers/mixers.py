@@ -338,7 +338,8 @@ class SubGVP(nn.Module):
                  num_layers,
                  dropout,
                  radius_cutoff=8.0,
-                 vector_gating=True
+                 vector_gating=True,
+                 pooling="sum",
                  ):
         super(SubGVP, self).__init__()
 
@@ -359,6 +360,7 @@ class SubGVP(nn.Module):
 
         self.radius_cutoff = radius_cutoff
         self.num_tokens = num_tokens
+        self.pooling = pooling
 
     def forward(self, x, v, ca_coords):
         # input shape:
@@ -388,5 +390,11 @@ class SubGVP(nn.Module):
         # reshape the output to the original shape
         x = x.view(batch_size, num_nodes, -1)
         v = v.view(batch_size, num_nodes, 3, -1)
+        if self.pooling == "sum":
+            x = x.sum(dim=1)
+            v = v.sum(dim=1)
+        elif self.pooling == "mean":
+            x = x.mean(dim=1)
+            v = v.mean(dim=1)
 
         return x, v

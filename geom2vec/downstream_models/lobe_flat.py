@@ -149,6 +149,7 @@ class Lobe(nn.Module):
                 num_layers=num_mixer_layers,
                 dropout=dropout,
                 radius_cutoff=radius_cutoff,
+                pooling=pooling,
             )
 
         self.output_projection = MLP(
@@ -248,6 +249,7 @@ class Lobe(nn.Module):
 
             x = x.reshape(batch_size, num_nodes, dim)
             x, v = self.mixer(x, v, ca_coords)
+
             x = self.output_projection(x)
 
         return x
