@@ -4,7 +4,9 @@ import torch
 import torch.nn as nn
 from einops.layers.torch import Rearrange
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
-
+from torch_geometric.nn import radius_graph
+from .gvp import GVP, GVPConvLayer
+from .gvp import LayerNorm as gvp_layer_norm
 
 class CustomTransformerEncoderLayer(TransformerEncoderLayer):
     """Transformer layer on coarsed graph, i.e. residue level (SubFormer)
@@ -74,17 +76,17 @@ class SubFormer(nn.Module):
     """
 
     def __init__(
-        self,
-        hidden_channels,
-        encoder_layers,
-        nhead,
-        dim_feedforward,
-        pool="cls",
-        dropout=0.1,
-        attn_map=True,
-        attn_mask=None,
-        pool_mask=None,
-        device=torch.device("cpu"),
+            self,
+            hidden_channels,
+            encoder_layers,
+            nhead,
+            dim_feedforward,
+            pool="cls",
+            dropout=0.1,
+            attn_map=True,
+            attn_mask=None,
+            pool_mask=None,
+            device=torch.device("cpu"),
     ):
         super(SubFormer, self).__init__()
 
@@ -155,7 +157,7 @@ class SubFormer(nn.Module):
                 [torch.tensor([False]).to(device), pool_mask], dim=0
             )
             assert (
-                self.pool != "cls"
+                    self.pool != "cls"
             ), "pool_mask is not compatible with cls token pooling"
 
     def get_weights(self, data):
@@ -268,16 +270,16 @@ class SubMixer(nn.Module):
     """
 
     def __init__(
-        self,
-        num_patch,
-        depth,
-        dropout,
-        dim,
-        token_dim,
-        channel_dim,
-        pool="mean",
-        pool_mask=None,
-        device=torch.device("cpu"),
+            self,
+            num_patch,
+            depth,
+            dropout,
+            dim,
+            token_dim,
+            channel_dim,
+            pool="mean",
+            pool_mask=None,
+            device=torch.device("cpu"),
     ):
         super().__init__()
         self.num_patch = num_patch
@@ -294,7 +296,7 @@ class SubMixer(nn.Module):
 
         if pool_mask is not None:
             assert (
-                pool_mask.shape[0] == num_patch
+                    pool_mask.shape[0] == num_patch
             ), f"Input tensor has {pool_mask.shape[0]} patches, but expected {num_patch}"
 
             # assume pool_mask is a boolean tensor
@@ -304,7 +306,7 @@ class SubMixer(nn.Module):
 
     def forward(self, x):
         assert (
-            x.shape[1] == self.num_patch
+                x.shape[1] == self.num_patch
         ), f"Input tensor has {x.shape[1]} patches, but expected {self.num_patch}"
         x = self.mixer(x)
 
@@ -323,3 +325,68 @@ class SubMixer(nn.Module):
                 x = x.sum(1)
 
         return x
+
+
+class SubGVP(nn.Module):
+    r"""
+    Graph Vector Perceptron model
+    """
+
+    def __init__(self,
+                 num_tokens,
+                 hidden_channels,
+                 num_layers,
+                 dropout,
+                 radius_cutoff=8.0,
+                 vector_gating=True
+                 ):
+        super(SubGVP, self).__init__()
+
+        self.input_proj = GVP(
+            in_dims=hidden_channels,
+            out_dims=hidden_channels,
+            vector_gate=vector_gating
+        )
+        self.input_norm = gvp_layer_norm(hidden_channels)
+
+        self.mp_layers = nn.ModuleList([
+            GVPConvLayer(
+                node_dims=hidden_channels,
+                drop_rate=dropout,
+                vector_gate=vector_gating
+            ) for _ in range(num_layers)
+        ])
+
+        self.radius_cutoff = radius_cutoff
+        self.num_tokens = num_tokens
+
+    def forward(self, x, v, ca_coords):
+        # input shape:
+            # x: (batch_size, num_nodes, hidden_channels)
+            # v: (batch_size, num_nodes, 3, hidden_channels)
+            # ca_coords: (batch_size, num_nodes, 3)
+
+        # creating the batching index
+        batch_size, num_nodes, feature_dim = x.shape
+        batch_index = torch.arange(batch_size).view(-1, 1).repeat(1, num_nodes).view(-1).to(x.device)
+        # flatten the input as PyG format: (batch_size * num_nodes, hidden_channels)
+        x = x.view(-1, feature_dim)
+        v = v.view(-1, 3, feature_dim)
+        ca_coords = ca_coords.view(-1, 3)
+
+        # construct the radius graph
+        edge_index = radius_graph(ca_coords, r=self.radius_cutoff, batch=batch_index, loop=False)
+
+        input_tuple = (x, v)  # gvp takes in a tuple of (scaler features, vector features)
+        feature_tuples = self.input_proj(input_tuple)
+        feature_tuples = self.input_norm(feature_tuples)
+
+        for layer in self.mp_layers:
+            feature_tuples = layer(feature_tuples,edge_index)
+        x, v = feature_tuples
+
+        # reshape the output to the original shape
+        x = x.view(batch_size, num_nodes, -1)
+        v = v.view(batch_size, num_nodes, 3, -1)
+
+        return x, v

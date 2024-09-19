@@ -76,7 +76,7 @@ class Preprocessing:
         if self.backend == 'mdtraj':
             for traj in tqdm(traj_objects, desc="Extracting Ca coordinates (mdtraj)"):
                 ca_indices = traj.top.select('name CA')
-                coords = torch.from_numpy(traj.xyz[:, ca_indices]).to(self._dtype)
+                coords = torch.from_numpy(traj.xyz[:, ca_indices]).to(self._dtype) * 10  # Convert to Angstrom
                 ca_coords.append(coords)
         elif self.backend == 'mda':
             for traj in tqdm(traj_objects, desc="Extracting Ca coordinates (MDAnalysis)"):

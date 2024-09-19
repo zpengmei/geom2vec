@@ -6,7 +6,7 @@ from torch import Tensor
 from torch.nn import BatchNorm1d, Dropout, Linear
 
 from ..layers.equivariant import EquivariantScalar
-from ..layers.mixers import SubFormer, SubMixer
+from ..layers.mixers import SubFormer, SubMixer, SubGVP
 from ..layers.mlps import MLP
 from ..data.util import unpacking_features
 
@@ -71,13 +71,15 @@ class Lobe(nn.Module):
         ## new arguments
         use_global: bool = False,
         global_dim: int = 64,
+        radius_cutoff: float = 8.0,
+        vector_gating: bool = False,
     ):
         super(Lobe, self).__init__()
 
-        assert token_mixer in ["none", "subformer", "submixer"]
+        assert token_mixer in ["none", "subformer", "submixer", "subgvp"]
         assert pooling in ["cls", "mean", "sum"]
 
-        if token_mixer == "submixer" and pooling == "cls":
+        if (token_mixer == "submixer" or "subgvp") and pooling == "cls":
             raise ValueError("Submixer does not support cls pooling")
 
         self.pooling = pooling
@@ -137,6 +139,16 @@ class Lobe(nn.Module):
                 pool=pooling,
                 pool_mask=pool_mask,
                 device=device,
+            )
+        elif token_mixer == "subgvp":
+            if use_global:
+                print("Warning: subgvp does not support global token for now")
+            self.mixer = SubGVP(
+                num_tokens=num_tokens,
+                hidden_channels=intermediate_channels,
+                num_layers=num_mixer_layers,
+                dropout=dropout,
+                radius_cutoff=radius_cutoff,
             )
 
         self.output_projection = MLP(
@@ -223,6 +235,19 @@ class Lobe(nn.Module):
                 # (batch, num_token, hidden_channels) -> (batch, num_token+1, hidden_channels)
                 x = torch.cat([x, global_proj.unsqueeze(1)], dim=1)
             x = self.mixer(x)
+            x = self.output_projection(x)
+
+        elif self.token_mixer == "subgvp":
+            batch_size, num_nodes, _, dim = data.shape
+            x_rep = data[:, :, 0, :].reshape(batch_size * num_nodes, -1)
+            v_rep = data[:, :, 1:, :].reshape(batch_size * num_nodes, 3, -1)
+            if not self.vector_feature:
+                x = self.input_projection(x_rep)
+            else:
+                x, v = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
+
+            x = x.reshape(batch_size, num_nodes, dim)
+            x, v = self.mixer(x, v, ca_coords)
             x = self.output_projection(x)
 
         return x
