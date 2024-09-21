@@ -67,4 +67,5 @@ class SPIB(nn.Module):
         self.train_loss_history = []
         self.test_loss_history = []
         self.convergence_history = []
+        self.label_history = []
 

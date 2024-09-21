@@ -14,6 +14,13 @@ class SPIBModel(SPIBVAE):
 
     @torch.no_grad()
     def update_model(self, inputs, input_weights, train_data_labels, test_data_labels, batch_size, threshold=0):
+
+        # send to device
+        inputs = inputs.to(self.device)
+        input_weights = input_weights.to(self.device)
+        train_data_labels = train_data_labels.to(self.device)
+        test_data_labels = test_data_labels.to(self.device)
+
         mean_rep = []
         for i in range(0, len(inputs), batch_size):
             batch_inputs = inputs[i:i + batch_size].to(self.device)
@@ -71,6 +78,7 @@ class SPIBModel(SPIBVAE):
                 batch_inputs = inputs[i:i + batch_size]
 
                 # pass through VAE
+                batch_inputs = batch_inputs.to(self.device)
                 x = self.encoder(batch_inputs)
                 z_mean, z_logvar = self.encode(x)
                 log_prediction = self.decode(z_mean)
@@ -87,6 +95,10 @@ class SPIBModel(SPIBVAE):
     def calculate_loss(self, data_inputs, data_targets, data_weights):
 
         # pass through VAE
+        data_inputs = data_inputs.to(self.device)
+        data_targets = data_targets.to(self.device)
+        data_weights = data_weights.to(self.device)
+
         outputs, z_sample, z_mean, z_logvar = self.forward(data_inputs)
 
         # KL Divergence
@@ -207,6 +219,10 @@ class SPIBModel(SPIBVAE):
         total_weight = 0
 
         for batch_inputs, batch_outputs, batch_weights in dataloader:
+            batch_inputs = batch_inputs.to(self.device)
+            batch_outputs = batch_outputs.to(self.device)
+            batch_weights = batch_weights.to(self.device)
+
             step += 1
             loss, recon_error, kl_loss = self.calculate_loss(batch_inputs, batch_outputs, batch_weights)
 
@@ -275,6 +291,7 @@ class SPIBModel(SPIBVAE):
 
         print('State population:')
         print(state_population.numpy())
+        self.label_history.append(state_population.numpy())
 
         mask = (state_population_prev > mask_threshold)
         relative_change = torch.sqrt(
