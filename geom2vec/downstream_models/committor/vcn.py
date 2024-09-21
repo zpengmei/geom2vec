@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Literal, Optional
 
 import numpy as np
@@ -91,7 +92,7 @@ class VCN(nn.Module):
         self._train_patience_counter = 0
         self._valid_patience_counter = 0
 
-        self._best_lobe_state = self._lobe.state_dict()
+        self._best_lobe_state = deepcopy(self._lobe.state_dict())
 
     @property
     def training_steps(self):
@@ -293,7 +294,7 @@ class VCN(nn.Module):
                     if score < self._best_valid_score:
                         self._best_valid_score = score
                         self._valid_patience_counter = 0
-                        self._best_lobe_state = self._lobe.state_dict()
+                        self._best_lobe_state = deepcopy(self._lobe.state_dict())
                     if self._valid_patience_counter >= valid_patience:
                         print(f"Validation patience reached at epoch {epoch}")
                         return self
@@ -428,8 +429,6 @@ class VCN(nn.Module):
 
     def fetch_model(self) -> nn.Module:
         """Return a copy of the neural network (lobe)."""
-        from copy import deepcopy
-
         return deepcopy(self._lobe)
 
     def save_model(self, path: str, name: str = "lobe.pt") -> nn.Module:
