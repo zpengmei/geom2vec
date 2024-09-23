@@ -162,7 +162,9 @@ class SubFormer(nn.Module):
 
     def get_weights(self, data):
         src = data
-        src = torch.cat((self.cls_token.expand(src.size(0), -1, -1), src), dim=1)
+        if self.pool == "cls":
+            src = torch.cat((self.cls_token.expand(src.size(0), -1, -1), src), dim=1)
+
         src, attention_weights = self.transformer_encoder(
             src, mask=self.attn_mask, src_key_padding_mask=None
         )
