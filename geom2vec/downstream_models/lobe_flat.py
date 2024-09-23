@@ -408,8 +408,9 @@ class Lobe(nn.Module):
             # add the global projection as a global token
             # (batch, num_token, hidden_channels) -> (batch, num_token+1, hidden_channels)
             x = torch.cat([x, global_proj.unsqueeze(1)], dim=1)
-        x = self.post_mixer(x)
-        attn_map = self.post_mixer.get_weights(x)
+        src = x
+        x = self.post_mixer(src)
+        attn_map = self.post_mixer.get_weights(src)
         x = self.output_projection(x)
 
         return x, attn_map
