@@ -375,3 +375,44 @@ class Lobe(nn.Module):
         x = x.reshape(batch_size, num_nodes, -1)
         attn_map = self.mixer.get_weights(x)
         return attn_map
+
+    def fetch_attnmap_subformer_gvp(self, data: torch.Tensor) -> (torch.Tensor, torch.Tensor):
+
+        unpacked_features = unpacking_features(data,
+                                               num_tokens=self.num_tokens,
+                                               hidden_dim=self.hidden_channels,
+                                               global_dim=self.global_dim,
+                                               )
+        graph_features = unpacked_features["graph_features"]
+        global_features = unpacked_features["global_features"]
+        ca_coords = unpacked_features["ca_coords"]
+
+        data = graph_features
+        # now graph features is a tensor of shape (batch_size, num_nodes, 4, feature_dim)
+        # global features is a tensor of shape (batch_size, global_dim)
+        # ca_coords is a tensor of shape (batch_size, num_nodes, 3)
+
+        if self.use_global:
+            global_proj = self.global_projection(global_features)
+
+        batch_size, num_nodes, _, _ = data.shape
+        x_rep = data[:, :, 0, :].reshape(batch_size * num_nodes, -1)
+        v_rep = data[:, :, 1:, :].reshape(batch_size * num_nodes, 3, -1)
+        if not self.vector_feature:
+            raise ValueError("Subformer-gvp does not support scalar-only")
+        else:
+            x, v = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
+        x = x.reshape(batch_size, num_nodes, -1)
+        x, v = self.mixer(x, v, ca_coords)
+        if self.use_global:
+            # add the global projection as a global token
+            # (batch, num_token, hidden_channels) -> (batch, num_token+1, hidden_channels)
+            x = torch.cat([x, global_proj.unsqueeze(1)], dim=1)
+        x = self.post_mixer(x)
+        attn_map = self.post_mixer.get_weights(x)
+        x = self.output_projection(x)
+
+        return x, attn_map
+
+
+
