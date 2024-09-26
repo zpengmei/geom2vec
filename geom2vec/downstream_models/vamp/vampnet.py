@@ -62,7 +62,7 @@ class VAMPNet:
         weight_decay: float = 0,
         mode: str = "regularize",
         symmetrized: bool = False,
-        dtype=np.float32,
+        dtype=torch.float32, # changed from np.float32
         save_model_interval=None,
     ):
         self._lobe = lobe
