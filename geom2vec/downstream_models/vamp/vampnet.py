@@ -64,7 +64,10 @@ class VAMPNet:
         symmetrized: bool = False,
         dtype=torch.float32, # changed from np.float32
         save_model_interval=None,
+        score_method='vamp-2'
     ):
+        assert score_method in ['vamp-2', 'vamp-1', 'vamp-e']
+
         self._lobe = lobe
         self._lobe_lagged = lobe_lagged
         self._device = device
@@ -74,6 +77,7 @@ class VAMPNet:
         self._symmetrized = symmetrized
         self._dtype = dtype
         self._save_model_interval = save_model_interval
+        self._score_method = score_method
 
         if self._dtype == np.float32:
             self._lobe = self._lobe.float()
@@ -123,7 +127,7 @@ class VAMPNet:
         self._validation_scores = []
 
         self._estimator = VAMPNet_Estimator(
-            epsilon=self._epsilon, mode=self._mode, symmetrized=self._symmetrized
+            epsilon=self._epsilon, mode=self._mode, symmetrized=self._symmetrized, score_method=self._score_method
         )
 
     @property

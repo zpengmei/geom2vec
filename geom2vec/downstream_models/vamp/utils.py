@@ -22,8 +22,8 @@ def empirical_correlation(x, y):
     x_remove_mean = x - x.mean()
     y_remove_mean = y - y.mean()
     corr = np.mean(x_remove_mean * y_remove_mean) / (
-        np.sqrt(np.mean(x_remove_mean * x_remove_mean))
-        * np.sqrt(np.mean(y_remove_mean * y_remove_mean))
+            np.sqrt(np.mean(x_remove_mean * x_remove_mean))
+            * np.sqrt(np.mean(y_remove_mean * y_remove_mean))
     )
     return np.abs(corr)
 
@@ -77,17 +77,17 @@ def rao_blackwell_ledoit_wolf(S, n):
 
 class ContourPlot2D:
     def __init__(
-        self,
-        bw_method="scotts",
-        num_grids=120,
-        cut=3,
-        clip=None,
-        temperature=310.0,
-        shade=True,
-        alpha=0.6,
-        vmin=0,
-        vmax=7,
-        n_levels=15,
+            self,
+            bw_method="scotts",
+            num_grids=120,
+            cut=3,
+            clip=None,
+            temperature=310.0,
+            shade=True,
+            alpha=0.6,
+            vmin=0,
+            vmax=7,
+            n_levels=15,
     ):
         self._bw_method = bw_method
         self._num_grids = num_grids
@@ -130,19 +130,19 @@ class ContourPlot2D:
     def _thermo_transform(self, z, temperature):
         from scipy.constants import Avogadro, Boltzmann, calorie_th
 
-        THERMO_CONSTANT = 10**-3 * Boltzmann * Avogadro / calorie_th
+        THERMO_CONSTANT = 10 ** -3 * Boltzmann * Avogadro / calorie_th
 
         return -THERMO_CONSTANT * temperature * np.log(z)
 
     def plot(
-        self,
-        data,
-        ax=None,
-        cbar=True,
-        cbar_kwargs={},
-        xlabel=None,
-        ylabel=None,
-        labelsize=10,
+            self,
+            data,
+            ax=None,
+            cbar=True,
+            cbar_kwargs={},
+            xlabel=None,
+            ylabel=None,
+            labelsize=10,
     ):
         from matplotlib import pyplot as plt
 
@@ -314,7 +314,7 @@ def compute_covariance_matrix(x: torch.Tensor, y: torch.Tensor, remove_mean=True
 
 
 def compute_covariance_matrix_stop(
-    x: torch.Tensor, y: torch.Tensor, ind_stop: torch.Tensor
+        x: torch.Tensor, y: torch.Tensor, ind_stop: torch.Tensor
 ):
     """This method can be applied to compute the covariance matrix from two batches of data.
 
@@ -347,12 +347,13 @@ def compute_covariance_matrix_stop(
 
 
 def estimate_koopman_matrix(
-    data: torch.Tensor,
-    data_lagged: torch.Tensor,
-    ind_stop: torch.Tensor = None,
-    epsilon=1e-6,
-    mode="regularize",
-    symmetrized=False,
+        data: torch.Tensor,
+        data_lagged: torch.Tensor,
+        ind_stop: torch.Tensor = None,
+        epsilon=1e-6,
+        mode="regularize",
+        symmetrized=False,
+        vampe=False
 ):
     """This method can be applied to compute the koopman matrix from time-instant and time-lagged data.
 
@@ -369,7 +370,8 @@ def estimate_koopman_matrix(
     mode : str, default = 'regularize'
         'regularize': regularize the eigenvalues by adding epsilon.
         'trunc': truncate the eigenvalues by filtering out the eigenvalues below epsilon.
-
+    vampe: bool, default = False
+        Constructing the koopman matrix for VAMP-E score.
     Returns
     -------
     koopman_matrix : torch.Tensor
@@ -412,11 +414,41 @@ def estimate_koopman_matrix(
                 (cov_0_sqrt_inverse, cov_1, cov_0_sqrt_inverse)
             ).t()
 
+    if vampe:
+        if ind_stop is not None:
+            cov_00, cov_01, cov_11 = compute_covariance_matrix_stop(
+                data, data_lagged, ind_stop
+            )
+        else:
+            cov_00, cov_01, cov_11 = compute_covariance_matrix(data, data_lagged)
+
+        c00_sqrt_inv = calculate_inverse(cov_00, epsilon=epsilon, return_sqrt=True, mode=mode)
+        c11_sqrt_inv = calculate_inverse(cov_11, epsilon=epsilon, return_sqrt=True, mode=mode)
+        try:
+            koopman_matrix = torch.linalg.multi_dot((c00_sqrt_inv, cov_01, c11_sqrt_inv)).t()
+        except:
+            koopman_matrix = torch.chain_matmul(c00_sqrt_inv, cov_01, c11_sqrt_inv).t()
+
+        u, s, v = torch.svd(koopman_matrix)
+        mask = s > epsilon
+
+        u = torch.mm(c00_sqrt_inv, u[:, mask])
+        v = torch.mm(c11_sqrt_inv, v[:, mask])
+        s = s[mask]
+
+        u_t = u.t()
+        v_t = v.t()
+        s = torch.diag(s)
+        score = torch.trace(
+            2. * torch.linalg.multi_dot([s, u_t, cov_01, v]) - torch.linalg.multi_dot([s, u_t, cov_00, u, s, v_t, cov_11, v])
+        ) + 1
+        return koopman_matrix, score
+
     return koopman_matrix
 
 
 def estimate_c_tilde_matrix(
-    data: torch.Tensor, data_lagged: torch.Tensor, reversible=True
+        data: torch.Tensor, data_lagged: torch.Tensor, reversible=True
 ):
     """This method can be applied to compute the C\tilde matrix from time-instant and time-lagged data.
 

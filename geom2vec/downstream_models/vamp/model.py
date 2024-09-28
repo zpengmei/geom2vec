@@ -23,6 +23,7 @@ class BaseVAMPNet_Model:
     """
 
     def __init__(self, lobe, lobe_lagged=None, device=None, dtype=np.float32):
+        # TODO: check the dtype, np format will be deprecated.
         self._lobe = lobe
         self._lobe_lagged = lobe_lagged
         self._dtype = dtype
@@ -106,7 +107,7 @@ class BaseVAMPNet_Model:
 
 
 class VAMPNet_Estimator:
-    def __init__(self, epsilon, mode, symmetrized):
+    def __init__(self, epsilon, mode, symmetrized, score_method='vamp-2'):
         """VAMPNet Estimator for VAMP score calculation.
 
         Parameters
@@ -117,6 +118,9 @@ class VAMPNet_Estimator:
             The mode for eigenvalue handling. Can be 'regularize' or 'trunc'.
         symmetrized : bool
             Whether to use symmetrized VAMP score calculation.
+
+        score_method: str, default = 'vamp-2'
+            The type of vamp score to use. Can be 'vamp-1' or 'vamp-2', or 'vamp-e'
 
         Attributes
         ----------
@@ -132,14 +136,18 @@ class VAMPNet_Estimator:
             Whether symmetrized calculation is used.
         _is_fitted : bool
             Whether the estimator has been fitted.
+        _score_method : str
+            The type of vamp score to use. Can be 'vamp-1' or 'vamp-2', or 'vamp-e'
         """
         self._score = None
         self._score_list = []
+        self._score_method = score_method
 
         self._epsilon = epsilon
         self._mode = mode
         self._symmetrized = symmetrized
         self._is_fitted = False
+
 
     @property
     def loss(self):
@@ -165,7 +173,21 @@ class VAMPNet_Estimator:
             mode=self._mode,
             symmetrized=self._symmetrized,
         )
-        self._score = torch.pow(torch.norm(koopman, p="fro"), 2) + 1
+        if self._score_method == 'vamp-1':
+            self._score = torch.norm(koopman, p="nuc")
+        elif self._score_method == 'vamp-2':
+            self._score = torch.pow(torch.norm(koopman, p="fro"), 2) + 1
+        elif self._score_method == 'vamp-e':
+            koopman,score = estimate_koopman_matrix(
+                data[0],
+                data[1],
+                epsilon=self._epsilon,
+                mode=self._mode,
+                symmetrized=self._symmetrized,
+                vampe=True
+            )
+            self._score = score
+
         self._is_fitted = True
 
         return self
