@@ -8,6 +8,7 @@ from torch_geometric.nn import radius_graph
 from .gvp import GVP, GVPConvLayer
 from .gvp import LayerNorm as gvp_layer_norm
 
+
 class CustomTransformerEncoderLayer(TransformerEncoderLayer):
     """Transformer layer on coarsed graph, i.e. residue level (SubFormer)
 
@@ -337,6 +338,7 @@ class SubGVP(nn.Module):
     def __init__(self,
                  num_tokens,
                  hidden_channels,
+                 num_gvp_ff_layers,
                  num_layers,
                  dropout,
                  radius_cutoff=8.0,
@@ -346,17 +348,18 @@ class SubGVP(nn.Module):
         super(SubGVP, self).__init__()
 
         self.input_proj = GVP(
-            in_dims=(hidden_channels,hidden_channels),
-            out_dims=(hidden_channels,hidden_channels),
+            in_dims=(hidden_channels, hidden_channels),
+            out_dims=(hidden_channels, hidden_channels),
             vector_gate=vector_gating
         )
-        self.input_norm = gvp_layer_norm((hidden_channels,hidden_channels))
+        self.input_norm = gvp_layer_norm((hidden_channels, hidden_channels))
 
         self.mp_layers = nn.ModuleList([
             GVPConvLayer(
-                node_dims=(hidden_channels,hidden_channels),
+                node_dims=(hidden_channels, hidden_channels),
                 drop_rate=dropout,
-                vector_gate=vector_gating
+                vector_gate=vector_gating,
+                n_feedforward=num_gvp_ff_layers
             ) for _ in range(num_layers)
         ])
 
@@ -366,9 +369,9 @@ class SubGVP(nn.Module):
 
     def forward(self, x, v, ca_coords):
         # input shape:
-            # x: (batch_size, num_nodes, hidden_channels)
-            # v: (batch_size, num_nodes, 3, hidden_channels)
-            # ca_coords: (batch_size, num_nodes, 3)
+        # x: (batch_size, num_nodes, hidden_channels)
+        # v: (batch_size, num_nodes, 3, hidden_channels)
+        # ca_coords: (batch_size, num_nodes, 3)
 
         # creating the batching index
         batch_size, num_nodes, feature_dim = x.shape
@@ -390,11 +393,10 @@ class SubGVP(nn.Module):
         feature_tuples = self.input_norm(feature_tuples)
 
         for layer in self.mp_layers:
-            feature_tuples = layer(feature_tuples,edge_index)
+            feature_tuples = layer(feature_tuples, edge_index)
         x, v = feature_tuples
         # permute the vector features back to (batch_size*num_nodes, 3, feature_dim)
         v = v.permute(0, 2, 1)
-
 
         # reshape the output to the original shape
         x = x.view(batch_size, num_nodes, -1)

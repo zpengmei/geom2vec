@@ -71,6 +71,7 @@ class Lobe(nn.Module):
             ## new arguments
             use_global: bool = False,
             global_dim: int = 64,
+            num_gvp_ff_layers: int = 1,
             radius_cutoff: float = 8.0,
             vector_gating: bool = False,
             gvp_post_mixer_layers: int = 2,
@@ -152,6 +153,7 @@ class Lobe(nn.Module):
                 radius_cutoff=radius_cutoff,
                 pooling=pooling,
                 vector_gating=vector_gating,
+                num_gvp_ff_layers=num_gvp_ff_layers,
             )
         elif token_mixer == "submixer-gvp":
             if not use_global:
@@ -164,6 +166,7 @@ class Lobe(nn.Module):
                     radius_cutoff=radius_cutoff,
                     pooling='skip',
                     vector_gating=vector_gating,
+                    num_gvp_ff_layers=num_gvp_ff_layers,
                 )
             else:
                 self.mixer = SubGVP(
@@ -173,6 +176,7 @@ class Lobe(nn.Module):
                     dropout=dropout,
                     radius_cutoff=radius_cutoff,
                     pooling='skip',
+                    num_gvp_ff_layers=num_gvp_ff_layers,
                 )
             self.post_mixer = SubMixer(
                 num_patch=num_tokens,
@@ -195,6 +199,7 @@ class Lobe(nn.Module):
                     dropout=dropout,
                     radius_cutoff=radius_cutoff,
                     pooling='skip',
+                    num_gvp_ff_layers=num_gvp_ff_layers,
                 )
             else:
                 self.mixer = SubGVP(
@@ -204,7 +209,9 @@ class Lobe(nn.Module):
                     dropout=dropout,
                     radius_cutoff=radius_cutoff,
                     pooling='skip',
+                    num_gvp_ff_layers=num_gvp_ff_layers,
                 )
+
             self.post_mixer = SubFormer(
                 hidden_channels=intermediate_channels,
                 encoder_layers=gvp_post_mixer_layers,
