@@ -71,7 +71,7 @@ class Lobe(nn.Module):
             ## new arguments
             use_global: bool = False,
             global_dim: int = 64,
-            num_gvp_ff_layers: int = 1,
+            num_gvp_ff_layers: int = 2,
             radius_cutoff: float = 8.0,
             vector_gating: bool = False,
             gvp_post_mixer_layers: int = 2,
