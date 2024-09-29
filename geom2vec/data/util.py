@@ -5,8 +5,8 @@ from typing import Optional
 
 def packing_features(
         graph_features: torch.Tensor,
-        global_features: torch.Tensor,
         num_tokens: int,
+        global_features: torch.Tensor = None,
         ca_coords: Optional[torch.Tensor] = None
 ) -> torch.Tensor:
     """
@@ -18,9 +18,10 @@ def packing_features(
         Tensor containing graph features.
         Shape: (batch, num_tokens, 4, hidden) if num_tokens > 1
                (batch, 4, hidden) if num_tokens == 1
-    global_features : torch.Tensor
+    global_features : torch.Tensor, optional
         Tensor containing global features.
         Shape: (batch, global_dim)
+        If None, global features are not included.
     num_tokens : int
         Number of tokens (e.g., amino acids) per sample.
     ca_coords : torch.Tensor, optional
@@ -33,10 +34,14 @@ def packing_features(
     torch.Tensor
         Packed feature tensor.
         Shape:
-            - If num_tokens > 1:
+            - If num_tokens > 1 and global_features is provided:
                 (batch, num_tokens * hidden + num_tokens * 3 * (hidden + 1) + global_dim)
-            - If num_tokens == 1:
+            - If num_tokens > 1 and global_features is None:
+                (batch, num_tokens * hidden + num_tokens * 3 * (hidden + 1))
+            - If num_tokens == 1 and global_features is provided:
                 (batch, 4 * hidden + global_dim)
+            - If num_tokens == 1 and global_features is None:
+                (batch, 4 * hidden)
 
     Raises
     ------
@@ -66,10 +71,11 @@ def packing_features(
         if ca_coords is not None:
             raise ValueError("ca_coords should be None when num_tokens == 1")
 
-    if global_features.size(0) != batch_size:
-        raise ValueError(
-            "Number of samples in global_features does not match the batch size of graph_features"
-        )
+    if global_features is not None:
+        if global_features.size(0) != batch_size:
+            raise ValueError(
+                "Number of samples in global_features does not match the batch size of graph_features"
+            )
 
     if num_tokens != 1:
         # Split graph features into scaler and vector components
@@ -85,7 +91,10 @@ def packing_features(
         vector_flat = vector_features.reshape(batch_size, -1)  # (batch, num_tokens * 3 * (hidden +1))
 
         # Concatenate all features
-        packed_features = torch.cat([scaler_flat, vector_flat, global_features], dim=-1)
+        if global_features is not None:
+            packed_features = torch.cat([scaler_flat, vector_flat, global_features], dim=-1)
+        else:
+            packed_features = torch.cat([scaler_flat, vector_flat], dim=-1)
     else:
         # Split graph features into scaler and vector components
         scaler_features = graph_features[:, 0, :]  # Shape: (batch, hidden)
@@ -96,9 +105,13 @@ def packing_features(
         vector_flat = vector_features.reshape(batch_size, -1)  # (batch, 3 * hidden)
 
         # Concatenate all features
-        packed_features = torch.cat([scaler_flat, vector_flat, global_features], dim=-1)
+        if global_features is not None:
+            packed_features = torch.cat([scaler_flat, vector_flat, global_features], dim=-1)
+        else:
+            packed_features = torch.cat([scaler_flat, vector_flat], dim=-1)
 
     return packed_features
+
 
 
 def unpacking_features(
