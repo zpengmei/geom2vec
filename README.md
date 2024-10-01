@@ -204,6 +204,39 @@ open an issue or contact us directly.
 
 If you use this package in your research, please cite the following paper:
 ```
+# Core Citations
+@misc{pengmei2024geom2vecpretrainedgnnsgeometric,
+      title={geom2vec: pretrained GNNs as geometric featurizers for conformational dynamics}, 
+      author={Zihan Pengmei and Chatipat Lorpaiboon and Spencer C. Guo and Jonathan Weare and Aaron R. Dinner},
+      year={2024},
+      eprint={2409.19838},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2409.19838}, 
+}
+
+# Pretraining/Scaling, to be updated
+
+# Token Mixers
+@misc{pengmei2023transformers,
+      title={Transformers are efficient hierarchical chemical graph learners}, 
+      author={Zihan Pengmei and Zimu Li and Chih-chan Tien and Risi Kondor and Aaron R. Dinner},
+      year={2023},
+      eprint={2310.01704},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
+}
+
+# Graph Global Token
+@misc{pengmei2024technical,
+      title={Technical Report: The Graph Spectral Token -- Enhancing Graph Transformers with Spectral Information}, 
+      author={Zihan Pengmei and Zimu Li},
+      year={2024},
+      eprint={2404.05604},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
+}
+
 ```
 
 ## To-do
