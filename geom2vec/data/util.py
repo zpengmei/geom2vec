@@ -1,116 +1,161 @@
 import numpy as np
 import torch
-from typing import Optional
+from typing import Optional, Union, List
 
 
 def packing_features(
-        graph_features: torch.Tensor,
+        graph_features: Union[torch.Tensor, List[torch.Tensor]],
         num_tokens: int,
-        global_features: torch.Tensor = None,
-        ca_coords: Optional[torch.Tensor] = None
-) -> torch.Tensor:
+        global_features: Optional[Union[torch.Tensor, List[torch.Tensor]]] = None,
+        ca_coords: Optional[Union[torch.Tensor, List[torch.Tensor]]] = None
+) -> Union[torch.Tensor, List[torch.Tensor]]:
     """
     Prepare the input data as a flat tensor by combining graph features, CA coordinates, and global features.
+    Supports both single trajectories and a list of trajectories.
 
     Parameters
     ----------
-    graph_features : torch.Tensor
-        Tensor containing graph features.
-        Shape: (batch, num_tokens, 4, hidden) if num_tokens > 1
-               (batch, 4, hidden) if num_tokens == 1
-    global_features : torch.Tensor, optional
-        Tensor containing global features.
-        Shape: (batch, global_dim)
-        If None, global features are not included.
+    graph_features : torch.Tensor or List[torch.Tensor]
+        Tensor or list of tensors containing graph features.
+        - Single trajectory:
+            Shape: (batch, num_tokens, 4, hidden) if num_tokens > 1
+                   (batch, 4, hidden) if num_tokens == 1
+        - Multiple trajectories:
+            Each element in the list should follow the single trajectory shape.
     num_tokens : int
-        Number of tokens (e.g., amino acids) per sample.
-    ca_coords : torch.Tensor, optional
-        Tensor containing CA coordinates.
-        Shape: (batch, num_tokens, 3)
+        Number of tokens (e.g., amino acids).
+        - Single trajectory: int
+        - Multiple trajectories: list of ints
+    global_features : torch.Tensor or List[torch.Tensor], optional
+        Tensor or list of tensors containing global features.
+        - Single trajectory:
+            Shape: (batch, global_dim)
+        - Multiple trajectories:
+            Each element in the list should follow the single trajectory shape.
+        If None, global features are not included.
+    ca_coords : torch.Tensor or List[torch.Tensor], optional
+        Tensor or list of tensors containing CA coordinates.
+        - Single trajectory:
+            Shape: (batch, num_tokens, 3)
+        - Multiple trajectories:
+            Each element in the list should follow the single trajectory shape.
         Required if num_tokens > 1.
 
     Returns
     -------
-    torch.Tensor
-        Packed feature tensor.
-        Shape:
-            - If num_tokens > 1 and global_features is provided:
-                (batch, num_tokens * hidden + num_tokens * 3 * (hidden + 1) + global_dim)
-            - If num_tokens > 1 and global_features is None:
-                (batch, num_tokens * hidden + num_tokens * 3 * (hidden + 1))
-            - If num_tokens == 1 and global_features is provided:
-                (batch, 4 * hidden + global_dim)
-            - If num_tokens == 1 and global_features is None:
-                (batch, 4 * hidden)
+    torch.Tensor or List[torch.Tensor]
+        Packed feature tensor or list of packed feature tensors.
+        - Single trajectory:
+            Packed tensor as per the original function.
+        - Multiple trajectories:
+            List of packed tensors, one for each trajectory.
 
     Raises
     ------
     ValueError
-        If input tensor dimensions do not align with expectations.
+        If input tensor dimensions do not align with expectations or input types mismatch.
     """
-    batch_size = graph_features.size(0)
+    # Check if inputs are lists (i.e., multiple trajectories)
+    is_list_input = isinstance(graph_features, list)
 
-    if num_tokens != 1:
-        expected_shape = (batch_size, num_tokens, 4, graph_features.size(-1))
-        if graph_features.dim() != 4 or graph_features.shape[:3] != expected_shape[:3]:
-            raise ValueError(
-                f"graph_features must have shape {expected_shape}, but got {graph_features.shape}"
-            )
-        if ca_coords is None:
-            raise ValueError("ca_coords must be provided when num_tokens > 1")
-        if ca_coords.shape != (batch_size, num_tokens, 3):
-            raise ValueError(
-                f"ca_coords must have shape ({batch_size}, {num_tokens}, 3), but got {ca_coords.shape}"
-            )
+    if is_list_input:
+        # Validate that other inputs are lists or None
+        if global_features is not None and not isinstance(global_features, list):
+            raise ValueError("global_features must be a list when graph_features is a list.")
+        if ca_coords is not None and not isinstance(ca_coords, list):
+            raise ValueError("ca_coords must be a list when graph_features is a list.")
+
+        print("Multiple trajectories detected.")
+        print('length of graph_features:', len(graph_features))
+        print('length of global_features:', len(global_features) if global_features is not None else None)
+        print('length of ca_coords:', len(ca_coords) if ca_coords is not None else None)
+
+
+        if not ((global_features is None or len(global_features) == len(graph_features)) and
+                (ca_coords is None or len(ca_coords) == len(graph_features))):
+            raise ValueError("All input lists must have the same length.")
+
+        packed_features_list = []
+        for i in range(len(graph_features)):
+            gf = graph_features[i]
+            nt = num_tokens
+            gf_global = global_features[i] if global_features is not None else None
+            ca = ca_coords[i] if ca_coords is not None else None
+
+            packed = packing_features(gf, nt, gf_global, ca)  # Recursive call for single trajectory
+            packed_features_list.append(packed)
+
+        return packed_features_list
+
     else:
-        expected_shape = (batch_size, 4, graph_features.size(-1))
-        if graph_features.dim() != 3 or graph_features.shape != expected_shape:
-            raise ValueError(
-                f"graph_features must have shape {expected_shape}, but got {graph_features.shape}"
-            )
-        if ca_coords is not None:
-            raise ValueError("ca_coords should be None when num_tokens == 1")
+        # Single trajectory processing (original function logic)
+        batch_size = graph_features.size(0)
 
-    if global_features is not None:
-        if global_features.size(0) != batch_size:
-            raise ValueError(
-                "Number of samples in global_features does not match the batch size of graph_features"
-            )
+        if isinstance(num_tokens, list):
+            raise ValueError("num_tokens should be an integer when graph_features is not a list.")
 
-    if num_tokens != 1:
-        # Split graph features into scaler and vector components
-        scaler_features = graph_features[:, :, 0, :]  # Shape: (batch, num_tokens, hidden)
-        vector_features = graph_features[:, :, 1:, :]  # Shape: (batch, num_tokens, 3, hidden)
-
-        # Concatenate CA coordinates to vector features
-        ca_coords_expanded = ca_coords.unsqueeze(-1)  # Shape: (batch, num_tokens, 3, 1)
-        vector_features = torch.cat([vector_features, ca_coords_expanded], dim=-1)  # (batch, num_tokens, 3, hidden +1)
-
-        # Flatten scaler and vector features
-        scaler_flat = scaler_features.reshape(batch_size, -1)  # (batch, num_tokens * hidden)
-        vector_flat = vector_features.reshape(batch_size, -1)  # (batch, num_tokens * 3 * (hidden +1))
-
-        # Concatenate all features
-        if global_features is not None:
-            packed_features = torch.cat([scaler_flat, vector_flat, global_features], dim=-1)
+        if num_tokens != 1:
+            expected_shape = (batch_size, num_tokens, 4, graph_features.size(-1))
+            if graph_features.dim() != 4 or graph_features.shape[:3] != expected_shape[:3]:
+                raise ValueError(
+                    f"graph_features must have shape {expected_shape}, but got {graph_features.shape}"
+                )
+            if ca_coords is None:
+                raise ValueError("ca_coords must be provided when num_tokens > 1")
+            if ca_coords.shape != (batch_size, num_tokens, 3):
+                raise ValueError(
+                    f"ca_coords must have shape ({batch_size}, {num_tokens}, 3), but got {ca_coords.shape}"
+                )
         else:
-            packed_features = torch.cat([scaler_flat, vector_flat], dim=-1)
-    else:
-        # Split graph features into scaler and vector components
-        scaler_features = graph_features[:, 0, :]  # Shape: (batch, hidden)
-        vector_features = graph_features[:, 1:, :]  # Shape: (batch, 3, hidden)
+            expected_shape = (batch_size, 4, graph_features.size(-1))
+            if graph_features.dim() != 3 or graph_features.shape != expected_shape:
+                raise ValueError(
+                    f"graph_features must have shape {expected_shape}, but got {graph_features.shape}"
+                )
+            if ca_coords is not None:
+                raise ValueError("ca_coords should be None when num_tokens == 1")
 
-        # Flatten scaler and vector features
-        scaler_flat = scaler_features.reshape(batch_size, -1)  # (batch, hidden)
-        vector_flat = vector_features.reshape(batch_size, -1)  # (batch, 3 * hidden)
-
-        # Concatenate all features
         if global_features is not None:
-            packed_features = torch.cat([scaler_flat, vector_flat, global_features], dim=-1)
-        else:
-            packed_features = torch.cat([scaler_flat, vector_flat], dim=-1)
+            if global_features.size(0) != batch_size:
+                raise ValueError(
+                    "Number of samples in global_features does not match the batch size of graph_features"
+                )
 
-    return packed_features
+        if num_tokens != 1:
+            # Split graph features into scaler and vector components
+            scaler_features = graph_features[:, :, 0, :]  # Shape: (batch, num_tokens, hidden)
+            vector_features = graph_features[:, :, 1:, :]  # Shape: (batch, num_tokens, 3, hidden)
+
+            # Concatenate CA coordinates to vector features
+            ca_coords_expanded = ca_coords.unsqueeze(-1)  # Shape: (batch, num_tokens, 3, 1)
+            vector_features = torch.cat([vector_features, ca_coords_expanded],
+                                        dim=-1)  # (batch, num_tokens, 3, hidden +1)
+
+            # Flatten scaler and vector features
+            scaler_flat = scaler_features.reshape(batch_size, -1)  # (batch, num_tokens * hidden)
+            vector_flat = vector_features.reshape(batch_size, -1)  # (batch, num_tokens * 3 * (hidden +1))
+
+            # Concatenate all features
+            if global_features is not None:
+                packed_features = torch.cat([scaler_flat, vector_flat, global_features], dim=-1)
+            else:
+                packed_features = torch.cat([scaler_flat, vector_flat], dim=-1)
+        else:
+            # Split graph features into scaler and vector components
+            scaler_features = graph_features[:, 0, :]  # Shape: (batch, hidden)
+            vector_features = graph_features[:, 1:, :]  # Shape: (batch, 3, hidden)
+
+            # Flatten scaler and vector features
+            scaler_flat = scaler_features.reshape(batch_size, -1)  # (batch, hidden)
+            vector_flat = vector_features.reshape(batch_size, -1)  # (batch, 3 * hidden)
+
+            # Concatenate all features
+            if global_features is not None:
+                packed_features = torch.cat([scaler_flat, vector_flat, global_features], dim=-1)
+            else:
+                packed_features = torch.cat([scaler_flat, vector_flat], dim=-1)
+
+        return packed_features
 
 
 
