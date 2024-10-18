@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -240,8 +240,7 @@ class Lobe(nn.Module):
 
         self.to(device)
 
-    def forward(self, data: torch.Tensor) -> torch.Tensor:
-        # now we assume the input data is a flat tensor
+    def forward(self, data: torch.Tensor, return_attn_map=False)-> Tuple[torch.Tensor, Optional[torch.Tensor]]:
 
         unpacked_features = unpacking_features(data,
                                                num_tokens=self.num_tokens,
@@ -253,9 +252,6 @@ class Lobe(nn.Module):
         ca_coords = unpacked_features["ca_coords"]
 
         data = graph_features
-        # now graph features is a tensor of shape (batch_size, num_nodes, 4, feature_dim)
-        # global features is a tensor of shape (batch_size, global_dim)
-        # ca_coords is a tensor of shape (batch_size, num_nodes, 3)
 
         if self.use_global:
             global_proj = self.global_projection(global_features)
@@ -288,12 +284,15 @@ class Lobe(nn.Module):
                 x, _ = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
             x = x.reshape(batch_size, num_nodes, -1)
             if self.use_global:
-                # add the global projection as a global token
-                # (batch, num_token, hidden_channels) -> (batch, num_token+1, hidden_channels)
                 x = torch.cat([x, global_proj.unsqueeze(1)], dim=1)
 
             x = self.mixer(x)
-            x = self.output_projection(x)
+            if return_attn_map:
+                attn_map = self.mixer.get_weights(x)
+                x = self.output_projection(x)
+                return x, attn_map
+            else:
+                x = self.output_projection(x)
 
         elif self.token_mixer == "submixer":
             batch_size, num_nodes, _, dim = data.shape
@@ -357,70 +356,15 @@ class Lobe(nn.Module):
                 # (batch, num_token, hidden_channels) -> (batch, num_token+1, hidden_channels)
                 x = torch.cat([x, global_proj.unsqueeze(1)], dim=1)
             x = self.post_mixer(x)
-            x = self.output_projection(x)
+            if return_attn_map:
+                attn_map = self.post_mixer.get_weights(x)
+                x = self.output_projection(x)
+                return x, attn_map
+            else:
+                x = self.output_projection(x)
 
         return x
 
-    def fetch_attnmap(self, data: torch.Tensor) -> torch.Tensor:
-        """
-        Fetches the attention map for the given data.
-
-        Args:
-            data: The input data of shape (batch_size, num_nodes, num_features, feature_dim).
-
-        Returns:
-            torch.Tensor: The attention map of shape (batch_size, num_nodes, num_nodes).
-        """
-        assert self.token_mixer == "subformer"
-        batch_size, num_nodes, _, _ = data.shape
-        x_rep = data[:, :, 0, :].reshape(batch_size * num_nodes, -1)
-        v_rep = data[:, :, 1:, :].reshape(batch_size * num_nodes, 3, -1)
-        if not self.vector_feature:
-            x = self.input_projection(x_rep)
-        else:
-            x, _ = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
-        x = x.reshape(batch_size, num_nodes, -1)
-        attn_map = self.mixer.get_weights(x)
-        return attn_map
-
-    def fetch_attnmap_subformer_gvp(self, data: torch.Tensor) -> (torch.Tensor, torch.Tensor):
-
-        unpacked_features = unpacking_features(data,
-                                               num_tokens=self.num_tokens,
-                                               hidden_dim=self.hidden_channels,
-                                               global_dim=self.global_dim,
-                                               )
-        graph_features = unpacked_features["graph_features"]
-        global_features = unpacked_features["global_features"]
-        ca_coords = unpacked_features["ca_coords"]
-
-        data = graph_features
-        # now graph features is a tensor of shape (batch_size, num_nodes, 4, feature_dim)
-        # global features is a tensor of shape (batch_size, global_dim)
-        # ca_coords is a tensor of shape (batch_size, num_nodes, 3)
-
-        if self.use_global:
-            global_proj = self.global_projection(global_features)
-
-        batch_size, num_nodes, _, _ = data.shape
-        x_rep = data[:, :, 0, :].reshape(batch_size * num_nodes, -1)
-        v_rep = data[:, :, 1:, :].reshape(batch_size * num_nodes, 3, -1)
-        if not self.vector_feature:
-            raise ValueError("Subformer-gvp does not support scalar-only")
-        else:
-            x, v = self.input_projection.pre_reduce(x=x_rep, v=v_rep)
-        x = x.reshape(batch_size, num_nodes, -1)
-        x, v = self.mixer(x, v, ca_coords)
-        if self.use_global:
-            # add the global projection as a global token
-            # (batch, num_token, hidden_channels) -> (batch, num_token+1, hidden_channels)
-            x = torch.cat([x, global_proj.unsqueeze(1)], dim=1)
-        src = x
-        x = self.post_mixer(src)
-        attn_map = self.post_mixer.get_weights(src)
-        x = self.output_projection(x)
-
-        return x, attn_map
 
 
 
