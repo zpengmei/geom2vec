@@ -88,7 +88,7 @@ class Preprocessing:
                 ca_coords.append(coords)
         return ca_coords
 
-    def _extract_ca_pairwise_dist(ca_coords):
+    def _extract_ca_pairwise_dist(self,ca_coords):
         """
         Extract the pairwise distances between the alpha carbons from the trajectories.
         Returns
