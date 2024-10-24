@@ -88,7 +88,7 @@ class Preprocessing:
                 ca_coords.append(coords)
         return ca_coords
 
-    def _extract_ca_pairwise_dist(self, ca_coords):
+    def _extract_ca_pairwise_dist(ca_coords):
         """
         Extract the pairwise distances between the alpha carbons from the trajectories.
         Returns
@@ -107,9 +107,9 @@ class Preprocessing:
             coords_i = coords[:, i_upper, :]
             coords_j = coords[:, j_upper, :]
             diff = coords_i - coords_j
-            sq_dist = np.sum(diff ** 2, axis=-1)
+            sq_dist = torch.sum(diff ** 2, dim=-1)
             pairwise_distances = np.sqrt(sq_dist)
-            ca_pw_dist.append(torch.from_numpy(pairwise_distances).to(self._dtype))
+            ca_pw_dist.append((pairwise_distances).float())
 
         print(f"Extracted pairwise distances for {len(ca_pw_dist)} trajectories.")
         print(f"Shape of the pairwise distances: {ca_pw_dist[0].shape}")
