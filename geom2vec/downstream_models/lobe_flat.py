@@ -129,7 +129,9 @@ class Lobe(nn.Module):
                 attn_mask=attn_mask,
                 pool_mask=pool_mask,
                 device=device,
+                use_pos_embedding=True,
             )
+
         elif token_mixer == "submixer":
             self.mixer = SubMixer(
                 num_patch=num_tokens,
@@ -223,6 +225,7 @@ class Lobe(nn.Module):
                 attn_mask=attn_mask,
                 pool_mask=pool_mask,
                 device=device,
+                use_pos_embedding=False,
             )
 
         self.output_projection = MLP(

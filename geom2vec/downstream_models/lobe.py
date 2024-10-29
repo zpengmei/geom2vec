@@ -106,6 +106,7 @@ class Lobe(nn.Module):
                 attn_mask=attn_mask,
                 pool_mask=pool_mask,
                 device=device,
+                use_pos_embedding=True,
             )
         elif token_mixer == "submixer":
             self.mixer = SubMixer(

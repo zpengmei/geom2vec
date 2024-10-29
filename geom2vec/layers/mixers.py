@@ -9,6 +9,23 @@ from .gvp import GVP, GVPConvLayer
 from .gvp import LayerNorm as gvp_layer_norm
 
 
+def get_pos_embedding(n_pos, hidden_channels):
+    r"""
+    Get the positional embedding using sine and cosine functions.
+
+    Args:
+        n_pos (int): The number of positions.
+        hidden_channels (int): The number of hidden units.
+    """
+    pos_embedding = torch.zeros(n_pos, hidden_channels)
+    position = torch.arange(0, n_pos, dtype=torch.float).unsqueeze(1)
+    div_term = torch.exp(
+        torch.arange(0, hidden_channels, 2).float() * (-torch.log(torch.tensor(10000.0)) / hidden_channels))
+    pos_embedding[:, 0::2] = torch.sin(position * div_term)
+    pos_embedding[:, 1::2] = torch.cos(position * div_term)
+    return pos_embedding  # [n_pos, hidden_channels]
+
+
 class CustomTransformerEncoderLayer(TransformerEncoderLayer):
     """Transformer layer on coarsed graph, i.e. residue level (SubFormer)
 
@@ -78,6 +95,7 @@ class SubFormer(nn.Module):
 
     def __init__(
             self,
+            num_tokens,
             hidden_channels,
             encoder_layers,
             nhead,
@@ -88,6 +106,7 @@ class SubFormer(nn.Module):
             attn_mask=None,
             pool_mask=None,
             device=torch.device("cpu"),
+            use_pos_embedding=False,
     ):
         super(SubFormer, self).__init__()
 
@@ -161,8 +180,16 @@ class SubFormer(nn.Module):
                     self.pool != "cls"
             ), "pool_mask is not compatible with cls token pooling"
 
+        if use_pos_embedding:
+            self.pos_emb = get_pos_embedding(num_tokens, hidden_channels).to(device)
+
+        self.to(device)
+
     def get_weights(self, data):
         src = data
+        if hasattr(self, "pos_emb"):
+            src = data + self.pos_emb
+
         if self.pool == "cls":
             src = torch.cat((self.cls_token.expand(src.size(0), -1, -1), src), dim=1)
 
@@ -173,6 +200,9 @@ class SubFormer(nn.Module):
 
     def forward(self, data):
         src = data
+        if hasattr(self, "pos_emb"):
+            src = data + self.pos_emb
+
         src = torch.cat((self.cls_token.expand(src.size(0), -1, -1), src), dim=1)
 
         if self.attn_map:
@@ -199,6 +229,8 @@ class SubFormer(nn.Module):
                 out = src[:, 1:, :].mean(dim=1)
             elif self.pool == "sum":
                 out = src[:, 1:, :].sum(dim=1)
+            elif self.pool == "skip":
+                out = src
 
         return out
 
