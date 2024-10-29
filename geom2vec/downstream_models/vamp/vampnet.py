@@ -202,7 +202,11 @@ class VAMPNet:
 
         with torch.no_grad():
             val_output_0 = self._lobe(val_batch_0)
-            val_output_1 = self._lobe(val_batch_1)
+            if self._lobe_lagged is not None:
+                self._lobe_lagged.eval()
+                val_output_1 = self._lobe_lagged(val_batch_1)
+            else:
+                val_output_1 = self._lobe(val_batch_1)
 
             score = self._estimator.fit([val_output_0, val_output_1]).score
             self._estimator.save()

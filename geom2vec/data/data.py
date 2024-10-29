@@ -88,7 +88,7 @@ class Preprocessing:
                 ca_coords.append(coords)
         return ca_coords
 
-    def _extract_ca_pairwise_dist(self, traj_objects):
+    def _extract_ca_pairwise_dist(self,ca_coords):
         """
         Extract the pairwise distances between the alpha carbons from the trajectories.
         Returns
@@ -96,43 +96,25 @@ class Preprocessing:
         ca_pairwise_dist : list of torch.Tensor
             The pairwise distances between the alpha carbons in the trajectories.
         """
+        # check if the ca_coords is a list or not
+        if not isinstance(ca_coords, list):
+            ca_coords = [ca_coords]
 
-        ca_pairwise_dist = []
-        if self.backend == 'mdtraj':
-            # select ca atoms pairs
-            sample_traj = traj_objects[0]
-            ca_pairs = sample_traj.top.select_pairs('name CA', 'name CA')
-            for traj in tqdm(traj_objects, desc="Extracting Ca pairwise distances (mdtraj)"):
-                # Compute the pairwise distances using mdtraj with selected pairs
-                distances = md.compute_distances(traj, ca_pairs)
-                ca_pairwise_dist.append(torch.from_numpy(distances).to(self._dtype))
-            print(f'There are {ca_pairwise_dist[0].shape[1]} pairs of CA pairwise distances as global features.')
-        elif self.backend == 'mda':
-            for u in tqdm(traj_objects, desc="Extracting Ca pairwise distances (MDAnalysis)"):
-                ca = u.select_atoms('name CA')
+        ca_pw_dist = []
+        for coords in tqdm(ca_coords, desc="Extracting Ca pairwise distances"):
+            n_frames, n_atoms, _ = coords.shape
+            i_upper, j_upper = np.triu_indices(n_atoms, k=1)
+            coords_i = coords[:, i_upper, :]
+            coords_j = coords[:, j_upper, :]
+            diff = coords_i - coords_j
+            sq_dist = torch.sum(diff ** 2, dim=-1)
+            pairwise_distances = np.sqrt(sq_dist)
+            ca_pw_dist.append((pairwise_distances).float())
 
-                # Initialize an array to store CA atom positions across all frames
-                n_frames = len(u.trajectory[::self.stride])
-                ca_coordinates = np.zeros((n_frames, len(ca), 3))
-                for idx, ts in enumerate(tqdm(u.trajectory[::self.stride], desc="Frames", leave=False)):
-                    ca_coordinates[idx] = ca.positions.copy()
+        print(f"Extracted pairwise distances for {len(ca_pw_dist)} trajectories.")
+        print(f"Shape of the pairwise distances: {ca_pw_dist[0].shape}")
 
-                # Compute the pairwise distances considering only the upper triangle
-                n_atoms = ca_coordinates.shape[1]
-                i_upper, j_upper = np.triu_indices(n_atoms, k=1)
-
-                # Get the coordinates of the atom pairs
-                coords_i = ca_coordinates[:, i_upper, :]  # Shape: (n_frames, n_pairs, 3)
-                coords_j = ca_coordinates[:, j_upper, :]  # Shape: (n_frames, n_pairs, 3)
-
-                # Compute the differences and distances
-                diff = coords_i - coords_j  # Shape: (n_frames, n_pairs, 3)
-                sq_dist = np.sum(diff ** 2, axis=-1)  # Shape: (n_frames, n_pairs)
-                pairwise_distances = np.sqrt(sq_dist)  # Shape: (n_frames, n_pairs)
-                ca_pairwise_dist.append(torch.from_numpy(pairwise_distances).to(self._dtype))
-            print(f'There are {ca_pairwise_dist[0].shape[1]} pairs of CA pairwise distances as global features.')
-
-        return ca_pairwise_dist
+        return ca_pw_dist
 
     def create_time_lagged_dataset_flat(self, data, lag_time, ca_coords, ca_pairwise_dist):
         # testing the new function to create time-lagged dataset in a flat format including new features
