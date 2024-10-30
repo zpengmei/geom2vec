@@ -218,15 +218,6 @@ If you use this package in your research, please cite the following papers:
     primaryClass={cs.LG},
     url={https://arxiv.org/abs/2409.19838}, 
 }
-@misc{pengmei2024pushinglimitsallatomgeometric,
-      title={Pushing the Limits of All-Atom Geometric Graph Neural Networks: Pre-Training, Scaling and Zero-Shot Transfer}, 
-      author={Zihan Pengmei and Zhengyuan Shen and Zichen Wang and Marcus Collins and Huzefa Rangwala},
-      year={2024},
-      eprint={2410.21683},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2410.21683}, 
-}
 @misc{pengmei2023transformers,
     title={Transformers are efficient hierarchical chemical graph learners}, 
     author={Zihan Pengmei and Zimu Li and Chih-chan Tien and Risi Kondor and Aaron R. Dinner},
