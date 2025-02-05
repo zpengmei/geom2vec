@@ -219,13 +219,12 @@ If you use this package in your research, please cite the following papers:
   publisher={AIP Publishing}
 }
 
-@inproceedings{
-pengmei2025pushing,
-title={Pushing the Limits of All-Atom Geometric Graph Neural Networks: Pre-Training, Scaling, and Zero-Shot Transfer},
-author={Zihan Pengmei and Zhengyuan Shen and Zichen Wang and Marcus D. Collins and Huzefa Rangwala},
-booktitle={The Thirteenth International Conference on Learning Representations},
-year={2025},
-url={https://openreview.net/forum?id=4S2L519nIX}
+@inproceedings{pengmei2025pushing,
+	title={Pushing the Limits of All-Atom Geometric Graph Neural Networks: Pre-Training, Scaling, and Zero-Shot Transfer},
+	author={Zihan Pengmei and Zhengyuan Shen and Zichen Wang and Marcus D. Collins and Huzefa Rangwala},
+	booktitle={The Thirteenth International Conference on Learning Representations},
+	year={2025},
+	url={https://openreview.net/forum?id=4S2L519nIX}
 }
 
 @misc{pengmei2023transformers,
